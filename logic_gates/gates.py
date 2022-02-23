@@ -147,7 +147,7 @@ class Circuit:
         nx.set_node_attributes(g, attributes, name="type")
         return g
 
-    def plot_network(self, prune=True):
+    def plot_network(self, prune=False):
         color_dict = {'unused_input': 0, 'unused_nand': 1, 'used_input': 2, 'used_nand': 3, 'output': 4}
         g = self.to_networkx_graph()
         # colors = [color_dict[g.nodes[str(i)]["type"]] for i in range(len(g.nodes()))]
@@ -170,8 +170,9 @@ class Circuit:
     def mutate(self, probability=0.6):
         if random.random() > probability:
             return
-        possible_mutations = [  # self.point_mutation,
-            # self.point_mutation,
+        possible_mutations = [self.point_mutation,
+            self.point_mutation,
+            self.point_mutation,
             self.gene_duplication,
             self.gene_deletion,
             self.gene_deletion,
@@ -185,13 +186,13 @@ class Circuit:
         self.construct_circuit()
 
     def point_mutation(self):
-        print('point')
+        #print('point')
         index = random.randrange(len(self.genome))
         new_value = random.randrange(len(self.gates))
         self.genome[index] = new_value
 
     def gene_duplication(self):
-        print('dup')
+        #print('dup')
         if len(self.nand_gates) == 0:
             return
         gene_index = random.randrange(len(self.nand_gates))
@@ -201,7 +202,7 @@ class Circuit:
         self.genome.append(output)
 
     def gene_deletion(self):
-        print('del')
+        #print('del')
         if len(self.nand_gates) == 0:
             return
         gene_index = random.randrange(len(self.nand_gates))
@@ -223,7 +224,7 @@ class Circuit:
         self.genome.pop(2 * gene_index + 1)
 
     def gene_addition(self):
-        print('add')
+        #print('add')
         gene = random.randrange(len(self.gates)), random.randrange(len(self.gates))
         output = self.genome[-1]
         self.genome[-1:] = gene

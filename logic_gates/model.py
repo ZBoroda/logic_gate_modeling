@@ -4,6 +4,8 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from gates import Circuit
+from multiprocessing import Pool
+
 
 class Model:
     def __init__(self, num_circuits, num_inputs, initial_genome):
@@ -11,15 +13,22 @@ class Model:
         self.circuits = [Circuit(num_inputs, initial_genome[:]) for _ in range(self.num_circuits)]
         for circuit in self.circuits:
             circuit.construct_circuit()
+        self.goal = None
+
+    def perform_evolution_step(self, circuit):
+        circuit.mutate()
+        circuit.evaluate_expression(self.goal)
+        return circuit
 
     def evolve(self, goal, max_gens=500):
+        self.goal = goal
         fitness = []
+        pool = Pool()
         for i in range(max_gens):
             fitness.append(self.circuits[0].evaluate_expression(goal))
             print('\t', i, fitness[i])
-            for circuit in self.circuits:
-                circuit.mutate()
-            self.circuits.sort(key=lambda x: x.evaluate_expression(goal), reverse=True)
+            self.circuits = pool.map(self.perform_evolution_step, [circuit for circuit in self.circuits])
+            self.circuits.sort(key=lambda circuit: circuit.fitness, reverse=True)
             if self.num_circuits % 2 == 0:
                 self.circuits[self.num_circuits // 2:] = [circuit.duplicate() for circuit in
                                                           self.circuits[:self.num_circuits // 2]]
@@ -29,13 +38,19 @@ class Model:
             if i == 1:
                 print('hi')
             if i >= 1:
-                if self.circuits[20].fitness < fitness[i - 1]:
-                    print('oh myy')
+                if self.circuits[30].fitness == 1.0:
+                    fitness.append(self.circuits[0].fitness)
+                    print('\t', i + 1, fitness[i])
+                    #return fitness, self.circuits
                 if fitness[i] < fitness[i - 1]:
                     print('Oh no')
-        fitness.append(self.circuits[0].evaluate_expression(goal))
-        print('\t', i, fitness[i])
+        fitness.append(self.circuits[0].fitness)
+        print('\t', i + 1, fitness[i])
         return fitness, self.circuits
+
+
+def function_goal(x):
+    return x[0] and x[1] #(x[0] or x[1]) and (x[2] or x[3])
 
 
 if __name__ == "__main__":
@@ -54,10 +69,12 @@ if __name__ == "__main__":
     '''
     c = Circuit(2, [0, 1, 2])
     c.construct_circuit()
-    c.plot_network()
-    m = Model(100, 2, [0, 1, 2])
-    fitness, circuits = m.evolve(lambda arr: (arr[0] or arr[1]))
-    # plt.plot(fitness)
+    # c.plot_network()
+    m = Model(200, 2, [0, 1, 2])
+    fitness, circuits = m.evolve(function_goal, max_gens=200)  # lambda arr: (arr[0] or arr[1]))
+    plt.plot(fitness)
+    print('hi')
+    plt.show()
     # nx.draw(c.to_networkx_graph())
     # plt.draw()
     # print("hi")

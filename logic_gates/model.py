@@ -53,7 +53,7 @@ class Model:
 
 
 def function_goal(x):
-    return not (x[0] and x[1]) and (x[0] or x[1]) and (x[2] or x[3]) and not (x[2] and x[3])
+    return not (x[0] or x[1]) #and (x[0] or x[1]) and (x[2] or x[3]) and not (x[2] and x[3])
 
 
 if __name__ == "__main__":
@@ -73,13 +73,13 @@ if __name__ == "__main__":
     c = Circuit(2, [0, 1, 2])
     c.construct_circuit()
     # c.plot_network()
-    m = Model(200, 4, [0, 1, 2, 3, 4, 5, 6])
+    m = Model(200, 2, [0, 1, 2])
     fitness, circuits = m.evolve(function_goal, max_gens=3000)  # lambda arr: (arr[0] or arr[1]))
     plt.plot(fitness)
-    print('hi')
+    #print('hi')
     plt.show()
     # nx.draw(c.to_networkx_graph())
     # plt.draw()
     # print("hi")
     circuits[0].plot_network()
-    print('hi')
+    #print('hi')

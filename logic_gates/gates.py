@@ -175,15 +175,15 @@ class Circuit:
         if random.random() > probability:
             return
         possible_mutations = [self.point_mutation,
-            self.point_mutation,
-            #self.point_mutation,
-            self.gene_duplication,
-            #self.gene_deletion,
-            self.gene_deletion,
-            self.gene_deletion,
-            # self.gene_duplication,
-            self.gene_addition
-        ]
+                              self.point_mutation,
+                              # self.point_mutation,
+                              self.gene_duplication,
+                              # self.gene_deletion,
+                              self.gene_deletion,
+                              self.gene_deletion,
+                              # self.gene_duplication,
+                              self.gene_addition
+                              ]
         random.choice(possible_mutations)()
         self.construct_circuit()
         # Makes a mutation Question: Do I want to change the number of mutations based on the size of the genome
@@ -191,13 +191,13 @@ class Circuit:
         # print(len(self.genome))
 
     def point_mutation(self):
-        #print('point')
+        # print('point')
         index = random.randrange(len(self.genome))
         new_value = random.randrange(len(self.gates))
         self.genome[index] = new_value
 
     def gene_duplication(self):
-        #print('dup')
+        # print('dup')
         if len(self.nand_gates) == 0:
             return
         gene_index = random.randrange(len(self.nand_gates))
@@ -229,7 +229,7 @@ class Circuit:
         self.genome.pop(2 * gene_index + 1)
 
     def gene_addition(self):
-        #print('add')
+        # print('add')
         gene = random.randrange(len(self.gates)), random.randrange(len(self.gates))
         output = self.genome[-1]
         self.genome[-1:] = gene

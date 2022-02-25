@@ -55,9 +55,6 @@ class NandGate(Gate):
         if self.evaluated:
             return self.value
         self.evaluated = True
-        if self.gate1 == self or self.gate2 == self:
-            self.value = True
-            return True
         self.value = nand(self.gate1.get_value(), self.gate2.get_value())
         return self.value
 
@@ -112,6 +109,13 @@ class Circuit:
             if self.evaluate(in_vals) == expression(in_vals):
                 correct_counter += 1
         self.fitness = correct_counter / (2 ** self.num_inputs)
+        if self.fitness == 1.0:
+            return 1.0
+        useless_gates = 0
+        for gate in self.gates:
+            if not gate.evaluated:
+                useless_gates += 1
+        self.fitness -= 0.005 * useless_gates
         return self.fitness
 
     def to_networkx_graph(self):
@@ -147,7 +151,7 @@ class Circuit:
         nx.set_node_attributes(g, attributes, name="type")
         return g
 
-    def plot_network(self, prune=False):
+    def plot_network(self, prune=True):
         color_dict = {'unused_input': 0, 'unused_nand': 1, 'used_input': 2, 'used_nand': 3, 'output': 4}
         g = self.to_networkx_graph()
         # colors = [color_dict[g.nodes[str(i)]["type"]] for i in range(len(g.nodes()))]
@@ -167,23 +171,24 @@ class Circuit:
         copy.construct_circuit()
         return copy
 
-    def mutate(self, probability=0.6):
+    def mutate(self, probability=0.8):
         if random.random() > probability:
             return
         possible_mutations = [self.point_mutation,
             self.point_mutation,
-            self.point_mutation,
+            #self.point_mutation,
             self.gene_duplication,
+            #self.gene_deletion,
             self.gene_deletion,
             self.gene_deletion,
             # self.gene_duplication,
             self.gene_addition
         ]
-
-        # Makes a mutation
         random.choice(possible_mutations)()
-
         self.construct_circuit()
+        # Makes a mutation Question: Do I want to change the number of mutations based on the size of the genome
+        # for i in range(1 + int(len(self.genome) / 20)):
+        # print(len(self.genome))
 
     def point_mutation(self):
         #print('point')
@@ -202,7 +207,7 @@ class Circuit:
         self.genome.append(output)
 
     def gene_deletion(self):
-        #print('del')
+        # print('del')
         if len(self.nand_gates) == 0:
             return
         gene_index = random.randrange(len(self.nand_gates))

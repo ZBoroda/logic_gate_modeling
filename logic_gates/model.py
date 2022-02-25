@@ -23,34 +23,37 @@ class Model:
     def evolve(self, goal, max_gens=500):
         self.goal = goal
         fitness = []
-        pool = Pool()
+        pool = Pool(8)
         for i in range(max_gens):
             fitness.append(self.circuits[0].evaluate_expression(goal))
             print('\t', i, fitness[i])
             self.circuits = pool.map(self.perform_evolution_step, [circuit for circuit in self.circuits])
             self.circuits.sort(key=lambda circuit: circuit.fitness, reverse=True)
+            if i >= 1:
+                if self.circuits[30].fitness == 1.0:
+                    fitness.append(self.circuits[0].fitness)
+                    print('\t', i + 1, fitness[i])
+                    return fitness, self.circuits
+                if fitness[i] < fitness[i - 1]:
+                    print('Oh no')
             if self.num_circuits % 2 == 0:
                 self.circuits[self.num_circuits // 2:] = [circuit.duplicate() for circuit in
                                                           self.circuits[:self.num_circuits // 2]]
             else:
                 self.circuits[self.num_circuits // 2:] = [circuit.duplicate() for circuit in
                                                           self.circuits[:self.num_circuits // 2 + 1]]
+            random.shuffle(self.circuits)
             if i == 1:
                 print('hi')
-            if i >= 1:
-                if self.circuits[30].fitness == 1.0:
-                    fitness.append(self.circuits[0].fitness)
-                    print('\t', i + 1, fitness[i])
-                    #return fitness, self.circuits
-                if fitness[i] < fitness[i - 1]:
-                    print('Oh no')
+            if i % 2000 == 0:
+                self.circuits[0].plot_network(prune=False)
         fitness.append(self.circuits[0].fitness)
         print('\t', i + 1, fitness[i])
         return fitness, self.circuits
 
 
 def function_goal(x):
-    return x[0] and x[1] #(x[0] or x[1]) and (x[2] or x[3])
+    return not (x[0] and x[1]) and (x[0] or x[1]) and (x[2] or x[3]) and not (x[2] and x[3])
 
 
 if __name__ == "__main__":
@@ -70,8 +73,8 @@ if __name__ == "__main__":
     c = Circuit(2, [0, 1, 2])
     c.construct_circuit()
     # c.plot_network()
-    m = Model(200, 2, [0, 1, 2])
-    fitness, circuits = m.evolve(function_goal, max_gens=200)  # lambda arr: (arr[0] or arr[1]))
+    m = Model(200, 4, [0, 1, 2, 3, 4, 5, 6])
+    fitness, circuits = m.evolve(function_goal, max_gens=3000)  # lambda arr: (arr[0] or arr[1]))
     plt.plot(fitness)
     print('hi')
     plt.show()

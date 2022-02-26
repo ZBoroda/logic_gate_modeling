@@ -8,12 +8,18 @@ def nand(arg1, arg2):
     return not (arg1 and arg2)
 
 
+class ContainsLoop(Exception):
+    pass
+
+
 class Gate(ABC):
     def __init__(self):
+        self.passed = False
         self.evaluated = False
         self.value = False
 
     def reset(self):
+        self.passed = False
         self.evaluated = False
         self.value = False
 
@@ -43,7 +49,8 @@ class NandGate(Gate):
     Nand gate functions as a nan, when get value is called this returns the nand of the values of its two input gates
     '''
 
-    def __init__(self):
+    def __init__(self, allow_loops):
+        self.allow_loops = allow_loops
         self.gate1 = None
         self.gate2 = None
 
@@ -52,10 +59,15 @@ class NandGate(Gate):
         self.gate2 = gate2
 
     def get_value(self):
-        if self.evaluated:
+        if not self.allow_loops:
+            if self.passed and not self.evaluated:
+                print('raised')
+                raise ContainsLoop()
+        if self.passed:
             return self.value
-        self.evaluated = True
+        self.passed = True
         self.value = nand(self.gate1.get_value(), self.gate2.get_value())
+        self.evaluated = True
         return self.value
 
 
@@ -67,7 +79,8 @@ class Circuit:
     location 2*i and 2*i + 1 are the indexes of its input gates. The final integer in the genome is the index of the output gate.
     """
 
-    def __init__(self, num_inputs, genome):
+    def __init__(self, num_inputs, genome, allow_loops=True):
+        self.allow_loops = allow_loops
         self.num_inputs = num_inputs
         self.genome = genome
         self.inputs = None
@@ -78,7 +91,7 @@ class Circuit:
     def construct_circuit(self):
         """Constructs the circuit based on the genome"""
         self.inputs = [InputGate() for _ in range(self.num_inputs)]
-        self.nand_gates = [NandGate() for _ in range((len(self.genome) - 1) // 2)]
+        self.nand_gates = [NandGate(self.allow_loops) for _ in range((len(self.genome) - 1) // 2)]
         self.gates = self.inputs + self.nand_gates
         for i in range((len(self.genome) - 1) // 2):
             self.nand_gates[i].set_inputs(self.gates[self.genome[2 * i]], self.gates[self.genome[2 * i + 1]])
@@ -106,8 +119,13 @@ class Circuit:
         for i in range(2 ** self.num_inputs):
             binary = format(i, '0' + str(self.num_inputs) + 'b')
             in_vals = [int(digit) == 1 for digit in binary]
-            if self.evaluate(in_vals) == expression(in_vals):
-                correct_counter += 1
+            try:
+                if self.evaluate(in_vals) == expression(in_vals):
+                    correct_counter += 1
+            except ContainsLoop:
+                print('hiiiiiiiiiii')
+                self.fitness = 0
+                return self.fitness
         self.fitness = correct_counter / (2 ** self.num_inputs)
         if self.fitness == 1.0:
             return 1.0

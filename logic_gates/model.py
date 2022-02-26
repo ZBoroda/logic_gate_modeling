@@ -10,7 +10,7 @@ from multiprocessing import Pool
 class Model:
     def __init__(self, num_circuits, num_inputs, initial_genome):
         self.num_circuits = num_circuits
-        self.circuits = [Circuit(num_inputs, initial_genome[:]) for _ in range(self.num_circuits)]
+        self.circuits = [Circuit(num_inputs, initial_genome[:], allow_loops=False) for _ in range(self.num_circuits)]
         for circuit in self.circuits:
             circuit.construct_circuit()
         self.goal = None
@@ -23,14 +23,15 @@ class Model:
     def evolve(self, goal, max_gens=500):
         self.goal = goal
         fitness = []
-        pool = Pool(8)
+        pool = Pool()
         for i in range(max_gens):
             fitness.append(self.circuits[0].evaluate_expression(goal))
             print('\t', i, fitness[i])
             self.circuits = pool.map(self.perform_evolution_step, [circuit for circuit in self.circuits])
             self.circuits.sort(key=lambda circuit: circuit.fitness, reverse=True)
+            print()
             if i >= 1:
-                if self.circuits[30].fitness == 1.0:
+                if self.circuits[0].fitness == 1.0 and self.circuits[30].fitness == 1.0:
                     fitness.append(self.circuits[0].fitness)
                     print('\t', i + 1, fitness[i])
                     return fitness, self.circuits
@@ -53,7 +54,7 @@ class Model:
 
 
 def function_goal(x):
-    return not (x[0] or x[1]) #and (x[0] or x[1]) and (x[2] or x[3]) and not (x[2] and x[3])
+    return (x[0] or x[1]) and not (x[0] and x[1])#and (x[0] or x[1]) and (x[2] or x[3]) and not (x[2] and x[3])
 
 
 if __name__ == "__main__":

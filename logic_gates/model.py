@@ -54,7 +54,7 @@ class Model:
 
 
 def function_goal(x):
-    return (x[0] or x[1]) and not (x[0] and x[1])#and (x[0] or x[1]) and (x[2] or x[3]) and not (x[2] and x[3])
+    return (x[0] and x[1])#and (x[0] or x[1]) and (x[2] or x[3]) and not (x[2] and x[3])
 
 
 if __name__ == "__main__":
@@ -71,9 +71,9 @@ if __name__ == "__main__":
     print(c.evaluate_expression(
         lambda arr: nand(nand(nand(arr[0], arr[1]), nand(arr[1], arr[2])), nand(nand(arr[1], arr[2]), arr[3]))))
     '''
-    c = Circuit(2, [0, 1, 2])
+    c = Circuit(2, [0, 1, 0, 2, 2])
     c.construct_circuit()
-    # c.plot_network()
+    c.to_networkx_graph(prune=True)
     m = Model(200, 2, [0, 1, 2])
     fitness, circuits = m.evolve(function_goal, max_gens=3000)  # lambda arr: (arr[0] or arr[1]))
     plt.plot(fitness)

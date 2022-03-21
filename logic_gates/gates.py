@@ -87,6 +87,7 @@ class Circuit:
         self.gates = None
         self.nand_gates = None
         self.fitness = 0
+        self.graph = None
 
     def construct_circuit(self):
         """Constructs the circuit based on the genome"""
@@ -132,11 +133,12 @@ class Circuit:
         useless_gates = 0
         for gate in self.gates:
             if not gate.evaluated:
-                useless_gates += 1
+                # useless_gates += 1
+                pass
         self.fitness -= 0.005 * useless_gates
         return self.fitness
 
-    def to_networkx_graph(self):
+    def to_networkx_graph(self, prune=False):
         """
         Builds a simple networkx graph for this circuit
         :return: a networkx graph representation of this circuit
@@ -167,11 +169,17 @@ class Circuit:
                 else:
                     attributes[i] = 'unused_nand'
         nx.set_node_attributes(g, attributes, name="type")
+        if prune:
+            color_dict = {'unused_input': 0, 'unused_nand': 1, 'used_input': 2, 'used_nand': 3, 'output': 4}
+            plotable_nodes = [n for n in g.nodes() if color_dict[g.nodes[n]["type"]] > 1]
+            # plotable_edges = [e for e in g.edges() if e[1] in plotable_nodes]
+            g = g.subgraph(plotable_nodes)
+        self.graph = g
         return g
 
     def plot_network(self, prune=True):
         color_dict = {'unused_input': 0, 'unused_nand': 1, 'used_input': 2, 'used_nand': 3, 'output': 4}
-        g = self.to_networkx_graph()
+        g = self.to_networkx_graph(prune)
         # colors = [color_dict[g.nodes[str(i)]["type"]] for i in range(len(g.nodes()))]
         if not prune:
             colors = [color_dict[g.nodes[n]["type"]] for n in g.nodes()]

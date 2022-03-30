@@ -5,14 +5,27 @@ import matplotlib.pyplot as plt
 
 
 def nand(arg1, arg2):
+    """
+    Performs a nand (not and) operation on two booleans
+    :param arg1: boolean 1
+    :param arg2: boolean 2
+    :return: not (arg1 and arg2)
+    """
     return not (arg1 and arg2)
 
 
 class ContainsLoop(Exception):
+    """
+    An exception for use in the gate classes in order to truncate the evaluation of a network if there is a back edge
+    (an edge that points to a node that has already been visited)
+    """
     pass
 
 
 class Gate(ABC):
+    """
+    Gates form the backbone of our circuit. This is an abstract class
+    """
     def __init__(self):
         self.passed = False
         self.evaluated = False
@@ -124,7 +137,6 @@ class Circuit:
                 if self.evaluate(in_vals) == expression(in_vals):
                     correct_counter += 1
             except ContainsLoop:
-                print('hiiiiiiiiiii')
                 self.fitness = 0
                 return self.fitness
         self.fitness = correct_counter / (2 ** self.num_inputs)
@@ -177,7 +189,7 @@ class Circuit:
         self.graph = g
         return g
 
-    def plot_network(self, prune=True):
+    def plot_network(self, prune=False):
         color_dict = {'unused_input': 0, 'unused_nand': 1, 'used_input': 2, 'used_nand': 3, 'output': 4}
         g = self.to_networkx_graph(prune)
         # colors = [color_dict[g.nodes[str(i)]["type"]] for i in range(len(g.nodes()))]
@@ -193,7 +205,7 @@ class Circuit:
         plt.show()
 
     def duplicate(self):
-        copy = Circuit(self.num_inputs, self.genome[:])
+        copy = Circuit(self.num_inputs, self.genome[:], self.allow_loops)
         copy.construct_circuit()
         return copy
 

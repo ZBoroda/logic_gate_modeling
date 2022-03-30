@@ -1,2 +1,3 @@
-from model import Model
-from gates import Circuit, nand
+__all__ = ['model', 'gates']
+from logic_gates.gates import Circuit, nand
+from logic_gates.model import Model

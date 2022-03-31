@@ -4,9 +4,10 @@ import random
 import matplotlib.pyplot as plt
 
 
-def nand(arg1, arg2):
+def nand(arg1: bool, arg2: bool):
     """
     Performs a nand (not and) operation on two booleans
+
     :param arg1: boolean 1
     :param arg2: boolean 2
     :return: not (arg1 and arg2)
@@ -24,7 +25,7 @@ class ContainsLoop(Exception):
 
 class Gate(ABC):
     """
-    Gates form the backbone of our circuit. This is an abstract class
+    Gates form the backbone of our circuit. This is an abstract class.
     """
     def __init__(self):
         self.passed = False
@@ -32,47 +33,94 @@ class Gate(ABC):
         self.value = False
 
     def reset(self):
+        """
+        Resets the gate to its pre-computation self.
+        """
         self.passed = False
         self.evaluated = False
         self.value = False
 
     @abstractmethod
-    def get_value(self):
+    def get_value(self) -> bool:
+        """
+        Returns the value stored at this gate.
+
+        :return: the value stored
+        """
         raise NotImplementedError
 
 
 class InputGate(Gate):
-    '''
+    """
     An input gate functions as an input
-    '''
+    Default value is False
+    """
 
     def __init__(self):
+        """
+        Constructs a new InputGate with default value False
+        """
         self.value = False
 
-    def set_value(self, value):
+    def set_value(self, value: bool):
+        """
+        Sets the value stored at this gate to value
+
+        :param value: A boolean that will be stored at this gate
+        """
         self.value = value
 
-    def get_value(self):
+    def get_value(self) -> bool:
+        """
+        Returns the value stored at this gate.
+
+        :return: the value stored
+        """
         self.evaluated = True
         return self.value
 
 
 class NandGate(Gate):
-    '''
-    Nand gate functions as a nan, when get value is called this returns the nand of the values of its two input gates
-    '''
+    """
+    NandGate functions as a nand, when get value is called this returns the nand of the values of its two input gates
 
-    def __init__(self, allow_loops):
+    If allows_loops is True then this nand gate will return False whenever it's getValue method is called by a
+    recursive call to getValue originating inside this nandGate, if False this nandGate will raise a ContainsLoop
+    exception whenever it's getValue method is called by a recursive call to getValue originating inside this nandGate.
+    """
+
+    def __init__(self, allow_loops: bool):
+        """
+        Constructs a new NandGate
+
+        :param allow_loops: whether this nand gate is allowed to be in a loop.
+        """
         self.allow_loops = allow_loops
         self.gate1 = None
         self.gate2 = None
 
-    def set_inputs(self, gate1, gate2):
+    def set_inputs(self, gate1: Gate, gate2: Gate):
+        """
+        Set the input gates to gate1 and gate2
+
+        :param gate1: the first input
+        :param gate2: the second input
+        """
         self.gate1 = gate1
         self.gate2 = gate2
 
     def get_value(self):
+        """
+        Returns that value of this node. Value gets calculated by performing nand of the values of the two inputs.
+        If allows_loops is True then this nand gate will return False whenever it's getValue method is called by a
+        recursive call to getValue originating inside this nandGate, if False this nandGate will raise a ContainsLoop
+        exception whenever it's getValue method is called by a recursive call to getValue originating inside this nandGate.
+
+        :return: the value of this node
+        """
         if not self.allow_loops:
+            # this node is in a loop when this method is called again before it has ever evaluated the nand of its
+            # inputs. (passed is true so this method has been called once, but evaluated is false)
             if self.passed and not self.evaluated:
                 print('raised')
                 raise ContainsLoop()
@@ -153,6 +201,8 @@ class Circuit:
     def to_networkx_graph(self, prune=False):
         """
         Builds a simple networkx graph for this circuit
+
+        :param prune:
         :return: a networkx graph representation of this circuit
         """
         adj_list = []

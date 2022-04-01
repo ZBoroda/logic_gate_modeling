@@ -134,10 +134,13 @@ class NandGate(Gate):
 
 class Circuit:
     """
-    Circuit is the object that forms the bedrock of the entire project
+    Circuit is the object that forms the bedrock of the entire project.
+
     Each Circuit contains a genome and a number of inputs
-    The genome is a list of integers: for any nand gate, x, in the circuit with index, i, the integers in the genome at
-    location 2*i and 2*i + 1 are the indexes of its input gates. The final integer in the genome is the index of the output gate.
+
+    The genome is a list of integers: for any nand gate, x, in the circuit with index, i, the integers in the
+    genome at location 2*i and 2*i + 1 are the indexes of its input gates. The final integer in the genome is the
+    index of the output gate.
     """
 
     def __init__(self, num_inputs, genome, allow_loops=True):
@@ -151,7 +154,9 @@ class Circuit:
         self.graph = None
 
     def construct_circuit(self):
-        """Constructs the circuit based on the genome"""
+        """
+        Constructs the circuit based on the genome
+        """
         self.inputs = [InputGate() for _ in range(self.num_inputs)]
         self.nand_gates = [NandGate(self.allow_loops) for _ in range((len(self.genome) - 1) // 2)]
         self.gates = self.inputs + self.nand_gates
@@ -161,6 +166,7 @@ class Circuit:
     def evaluate(self, in_vals):
         """
         Evaluates truth value of the circuit for specific inputs
+
         :param in_vals: the values of the inputs
         :return: the truth value of the circuit
         """
@@ -172,10 +178,11 @@ class Circuit:
 
     def evaluate_expression(self, expression):
         """
-        For a expression passed in as a function compares for all possible combinations of inputs how close the
+        For an expression passed in as a function compares for all possible combinations of inputs how close the
         resulting input from the expression matches the one provided by the circuit
+
         :param expression:  A boolean expression passed in as a function
-        :return: How many matches
+        :return: the percentage of matches between this network and the expression
         """
         correct_counter = 0
         for i in range(2 ** self.num_inputs):
@@ -198,11 +205,11 @@ class Circuit:
         self.fitness -= 0.005 * useless_gates
         return self.fitness
 
-    def to_networkx_graph(self, prune=False):
+    def to_networkx_graph(self, prune: bool = False) -> nx.DiGraph:
         """
         Builds a simple networkx graph for this circuit
 
-        :param prune:
+        :param prune: if true only return the part of the network used in computation of the expression
         :return: a networkx graph representation of this circuit
         """
         adj_list = []
@@ -239,7 +246,12 @@ class Circuit:
         self.graph = g
         return g
 
-    def plot_network(self, prune=False):
+    def plot_network(self, prune: bool = False):
+        """
+        Plot the network
+
+        :param prune: if true then only plot the part of the network used in computation of the expression
+        """
         color_dict = {'unused_input': 0, 'unused_nand': 1, 'used_input': 2, 'used_nand': 3, 'output': 4}
         g = self.to_networkx_graph(prune)
         # colors = [color_dict[g.nodes[str(i)]["type"]] for i in range(len(g.nodes()))]
@@ -255,11 +267,25 @@ class Circuit:
         plt.show()
 
     def duplicate(self):
+        """
+        Returns a copy of this circuit
+
+        :return:  copy of this circuit
+        """
         copy = Circuit(self.num_inputs, self.genome[:], self.allow_loops)
         copy.construct_circuit()
         return copy
 
-    def mutate(self, probability=0.8):
+    def mutate(self, probability: float = 0.8):
+        """
+        Performs a mutation on this circuit. There are 4 types of mutations:
+        :func:`point_mutation`
+        :func:`gene_duplication`
+        :func:`gene_deletion`
+        :func:`gene_addition`
+
+        :param probability: the probability that a mutation will occur
+        """
         if random.random() > probability:
             return
         possible_mutations = [self.point_mutation,
@@ -279,12 +305,19 @@ class Circuit:
         # print(len(self.genome))
 
     def point_mutation(self):
+        """
+        Perform a point mutation. Swap one of the spots in the genome for another gate's numbers.
+        """
         # print('point')
         index = random.randrange(len(self.genome))
         new_value = random.randrange(len(self.gates))
         self.genome[index] = new_value
 
     def gene_duplication(self):
+        """
+        Duplicate a gate, take the coding for a gate 2 letters in the genome and add
+        that same gate to the end of the genome
+        """
         # print('dup')
         if len(self.nand_gates) == 0:
             return
@@ -295,6 +328,9 @@ class Circuit:
         self.genome.append(output)
 
     def gene_deletion(self):
+        """
+        Delete a gene
+        """
         # print('del')
         if len(self.nand_gates) == 0:
             return
@@ -317,6 +353,9 @@ class Circuit:
         self.genome.pop(2 * gene_index + 1)
 
     def gene_addition(self):
+        """
+        Add a random gene to the end of the genome
+        """
         # print('add')
         gene = random.randrange(len(self.gates)), random.randrange(len(self.gates))
         output = self.genome[-1]

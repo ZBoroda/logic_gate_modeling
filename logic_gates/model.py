@@ -8,7 +8,18 @@ from multiprocessing import Pool
 
 
 class Model:
+    """
+    A Model is an object that contains a population of num_circuits circuits each with num_inputs inputs
+    """
     def __init__(self, num_circuits, num_inputs, initial_genome):
+        """
+        Constructs a model object with a population of num_circuits circuits each with num_inputs inputs and genome
+        initial_genome
+
+        :param num_circuits: the number of circuits in the population
+        :param num_inputs: the number of inputs for each circuit
+        :param initial_genome: the initial genome of each circuit
+        """
         self.num_circuits = num_circuits
         self.circuits = [Circuit(num_inputs, initial_genome[:], allow_loops=False) for _ in range(self.num_circuits)]
         for circuit in self.circuits:
@@ -16,11 +27,25 @@ class Model:
         self.goal = None
 
     def perform_evolution_step(self, circuit):
+        """
+        Function used for multiprocessing so that I dont need to deal with shared memory.
+        Performs an evolution step on a circuit: mutates and then evaluates the fitness returning the mutated circuit
+
+        :param circuit: the circuit being mutated
+        :return: this mutated circuit
+        """
         circuit.mutate()
         circuit.evaluate_expression(self.goal)
         return circuit
 
     def evolve(self, goal, max_gens=500):
+        """
+        Performs evolution for max gens generations toward goal goal
+
+        :param goal: the desired logic function that is being evolved towards
+        :param max_gens: the number of generations to run this experiment for
+        :return: the fitness trajectory of the top circuit, the final list of circuits
+        """
         self.goal = goal
         fitness = []
         pool = Pool()

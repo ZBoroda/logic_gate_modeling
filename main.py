@@ -4,6 +4,7 @@ from logic_gates import Model
 import networkx as nx
 import numpy as np
 import random
+
 import matplotlib.pyplot as plt
 
 

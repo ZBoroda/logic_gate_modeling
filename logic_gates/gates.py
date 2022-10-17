@@ -27,6 +27,7 @@ class Gate(ABC):
     """
     Gates form the backbone of our circuit. This is an abstract class.
     """
+
     def __init__(self):
         self.passed = False
         self.evaluated = False
@@ -122,7 +123,7 @@ class NandGate(Gate):
             # this node is in a loop when this method is called again before it has ever evaluated the nand of its
             # inputs. (passed is true so this method has been called once, but evaluated is false)
             if self.passed and not self.evaluated:
-                print('raised')
+                # print('raised')
                 raise ContainsLoop()
         if self.passed:
             return self.value
@@ -130,6 +131,9 @@ class NandGate(Gate):
         self.value = nand(self.gate1.get_value(), self.gate2.get_value())
         self.evaluated = True
         return self.value
+
+
+dynamic_programming_dict = {}
 
 
 class Circuit:
@@ -143,7 +147,7 @@ class Circuit:
     index of the output gate.
     """
 
-    def __init__(self, num_inputs, genome, allow_loops=True):
+    def __init__(self, num_inputs, genome, allow_loops: bool = False, use_dp=True):
         self.allow_loops = allow_loops
         self.num_inputs = num_inputs
         self.genome = genome
@@ -152,6 +156,8 @@ class Circuit:
         self.nand_gates = None
         self.fitness = 0
         self.graph = None
+        self.use_dp = use_dp
+        self.construct_circuit()
 
     def construct_circuit(self):
         """
@@ -176,14 +182,19 @@ class Circuit:
             self.inputs[i].set_value(in_vals[i])
         return self.gates[self.genome[-1]].get_value()
 
-    def evaluate_expression(self, expression):
+    def evaluate_expression(self, expression, penalize_useless: bool = False) -> float:
         """
         For an expression passed in as a function compares for all possible combinations of inputs how close the
         resulting input from the expression matches the one provided by the circuit
 
         :param expression:  A boolean expression passed in as a function
+        :param penalize_useless: Whether or not to penalize useless gates (gates that do not effect fitness)
         :return: the percentage of matches between this network and the expression
         """
+        if self.use_dp:
+            if str(self.genome) in dynamic_programming_dict:
+                self.fitness = dynamic_programming_dict[str(self.genome)]
+                return self.fitness
         correct_counter = 0
         for i in range(2 ** self.num_inputs):
             binary = format(i, '0' + str(self.num_inputs) + 'b')
@@ -195,15 +206,34 @@ class Circuit:
                 self.fitness = 0
                 return self.fitness
         self.fitness = correct_counter / (2 ** self.num_inputs)
-        if self.fitness == 1.0:
-            return 1.0
-        useless_gates = 0
-        for gate in self.gates:
-            if not gate.evaluated:
-                # useless_gates += 1
-                pass
-        self.fitness -= 0.005 * useless_gates
+        if penalize_useless:
+            if self.fitness == 1.0:
+                return 1.0
+            useless_gates = 0
+            for gate in self.gates:
+                if not gate.evaluated:
+                    useless_gates += 1
+            self.fitness -= 0.005 * useless_gates
+        if self.use_dp:
+            if str(self.genome) not in dynamic_programming_dict:
+                dynamic_programming_dict[str(self.genome)] = self.fitness
         return self.fitness
+
+    def contains_loops(self):
+        '''
+        Checks if this network has a loop (a cycle). This check is performed by for each node checking if the network
+        based in that node has a cycle
+
+        :return: True if network has a cycle
+        '''
+        for gate in self.gates:
+            gate.reset()
+        for gate in self.gates:
+            try:
+                gate.get_value()
+            except ContainsLoop:
+                return True
+        return False
 
     def to_networkx_graph(self, prune: bool = False) -> nx.DiGraph:
         """
@@ -218,7 +248,7 @@ class Circuit:
         for i in range((len(self.genome) - 1) // 2):
             adj_list.append(
                 str(i + self.num_inputs) + " " + str(self.genome[2 * i]) + " " + str(self.genome[2 * i + 1]))
-        print(adj_list)
+        # print(adj_list)
         g = nx.parse_adjlist(adj_list, create_using=nx.DiGraph, nodetype=int)
         g = g.reverse()
         attributes = {}
@@ -238,34 +268,46 @@ class Circuit:
                 else:
                     attributes[i] = 'unused_nand'
         nx.set_node_attributes(g, attributes, name="type")
+        self.graph = g
         if prune:
             color_dict = {'unused_input': 0, 'unused_nand': 1, 'used_input': 2, 'used_nand': 3, 'output': 4}
             plotable_nodes = [n for n in g.nodes() if color_dict[g.nodes[n]["type"]] > 1]
             # plotable_edges = [e for e in g.edges() if e[1] in plotable_nodes]
             g = g.subgraph(plotable_nodes)
-        self.graph = g
         return g
 
-    def plot_network(self, prune: bool = False):
+    def is_isomorphic(self, network, pruned: bool = True) -> bool:
+        graph = self.to_networkx_graph(pruned)
+        other_graph = network.to_networkx_graph(pruned)
+        return nx.is_isomorphic(graph, other_graph)
+
+    def plot_network(self, prune: bool = False, filename=None):
         """
         Plot the network
 
         :param prune: if true then only plot the part of the network used in computation of the expression
         """
+        plt.subplot()
         color_dict = {'unused_input': 0, 'unused_nand': 1, 'used_input': 2, 'used_nand': 3, 'output': 4}
         g = self.to_networkx_graph(prune)
+        colors = [color_dict[g.nodes[n]["type"]] for n in g.nodes()]
         # colors = [color_dict[g.nodes[str(i)]["type"]] for i in range(len(g.nodes()))]
         if not prune:
-            colors = [color_dict[g.nodes[n]["type"]] for n in g.nodes()]
+            # colors = [color_dict[g.nodes[n]["type"]] for n in g.nodes()]
             nx.draw_networkx(g, with_labels=True, node_color=colors, cmap=plt.get_cmap('cool'), font_color='white')
         else:
+            '''
             plotable_nodes = [n for n in g.nodes() if color_dict[g.nodes[n]["type"]] > 1]
             colors = [color_dict[g.nodes[n]["type"]] for n in g.nodes() if color_dict[g.nodes[n]["type"]] > 1]
             plotable_edges = [e for e in g.edges() if e[1] in plotable_nodes]
             nx.draw_networkx(g, node_color=colors, cmap=plt.get_cmap('Dark2'), font_color='white',
                              nodelist=plotable_nodes, edgelist=plotable_edges, with_labels=True)
-        plt.show()
-
+            '''
+            nx.draw_networkx(g, with_labels=True, node_color=colors, cmap=plt.get_cmap('Dark2'), font_color='white')
+        if not filename:
+            plt.show()
+        else:
+            plt.savefig(filename, dpi=1000)
     def duplicate(self):
         """
         Returns a copy of this circuit
@@ -276,7 +318,7 @@ class Circuit:
         copy.construct_circuit()
         return copy
 
-    def mutate(self, probability: float = 0.8):
+    def mutate(self, probability: float = 1, model_type: str = 'Basic', mutation_rate_prop_to_size: bool = False):
         """
         Performs a mutation on this circuit. There are 4 types of mutations:
         :func:`point_mutation`
@@ -285,21 +327,33 @@ class Circuit:
         :func:`gene_addition`
 
         :param probability: the probability that a mutation will occur
+        :param model_type: the types of mutations that
+        :param mutation_rate_prop_to_size: whether the mutation rate should scale with the size
+        the network should allow. 'Basic', the default, means only point mutations. 'All' means run with all mutations.
         """
-        if random.random() > probability:
-            return
-        possible_mutations = [self.point_mutation,
-                              self.point_mutation,
-                              # self.point_mutation,
-                              self.gene_duplication,
-                              # self.gene_deletion,
-                              self.gene_deletion,
-                              self.gene_deletion,
-                              # self.gene_duplication,
-                              self.gene_addition
-                              ]
-        random.choice(possible_mutations)()
-        self.construct_circuit()
+        if mutation_rate_prop_to_size:
+            if random.random() > probability * len(self.genome):
+                return
+        else:
+            if random.random() > probability:
+                return
+        possible_mutations = []
+        if model_type == 'Basic':
+            possible_mutations = [self.point_mutation]
+        else:
+            possible_mutations = [self.point_mutation,
+                                  self.gene_duplication,
+                                  self.gene_deletion,
+                                  self.gene_deletion,
+                                  self.gene_addition
+                                  ]
+        old_genome = self.genome.copy()
+        while True:
+            random.choice(possible_mutations)()
+            self.construct_circuit()
+            if self.allow_loops or not self.contains_loops():
+                break
+            self.genome = old_genome
         # Makes a mutation Question: Do I want to change the number of mutations based on the size of the genome
         # for i in range(1 + int(len(self.genome) / 20)):
         # print(len(self.genome))
@@ -361,3 +415,9 @@ class Circuit:
         output = self.genome[-1]
         self.genome[-1:] = gene
         self.genome.append(output)
+
+    def __repr__(self):
+        return str(self.genome)
+
+    def __str__(self):
+        return 'Circuit ' + str(self.num_inputs) + ' inputs ' + str(self.genome) + ' genome'

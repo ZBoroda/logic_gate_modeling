@@ -1,5 +1,6 @@
 from logic_gates.gates import Circuit, nand
-from logic_gates.model import Model
+from logic_gates.fullmodel import FullModel
+from logic_gates.strongselectionmodel import run_evo
 
-__all__ = ['Model', 'Circuit', 'nand']
+__all__ = ['FullModel', 'Circuit', 'nand', 'run_evo']
 

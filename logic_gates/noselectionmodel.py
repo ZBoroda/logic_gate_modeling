@@ -3,7 +3,7 @@ import numpy as np
 from logic_gates import Circuit
 
 
-def run_evolution_strong_selection(f, N: int, mu: float, x_init: Circuit, t_max: int):
+def run_random_walk(f, N: int, mu: float, x_init: Circuit, t_max: int):
     """
     Run evolutionary dynanamics in strong selection weak mutation regime.
 
@@ -28,27 +28,7 @@ def run_evolution_strong_selection(f, N: int, mu: float, x_init: Circuit, t_max:
         tau_next = np.random.exponential(1 / (N * mu * L))
         xm = x.duplicate()
         xm.mutate()
-        old_fitness = x.evaluate_expression(f)
-        new_fitness = xm.evaluate_expression(f)
-        s = (new_fitness - old_fitness)  # for turbidostat we would use (f(xm)-f(x))/f(x)
-        # the formula holds for all s but we have numerical problems when s is too small
-        # there are better ways around this
-        if s != 0:
-            if np.abs(-s * N) < 250:
-                pfix = (1 - np.exp(-s)) / (1 - np.exp(-s * N))
-            elif -s * N > 0:
-                pfix = 0
-            else:
-                pfix = 1 - np.exp(-s)
-        else:
-            pfix = 1 / N
-        if s == 0:
-            neutral += 1
-        r = np.random.rand()
-        if r < pfix:
-            x = xm.duplicate()
-            if s == 0:
-                neutral_fix += 1
+        x = xm.duplicate()
         # update
         F.append(x.evaluate_expression(f))
         X.append(x)

@@ -1,4 +1,4 @@
-from logic_gates import run_evo, Circuit
+from logic_gates import run_evolution_strong_selection, Circuit
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     total_times = []
     fig, ax = plt.subplots(1, 1, tight_layout=True)
     for i in range(10):
-        time, circuits, fitness = run_evo(goal_function, 1000, 0.1, initial_circuit, 1000000)
+        time, circuits, fitness = run_evolution_strong_selection(goal_function, 1000, 0.1, initial_circuit, 1000000)
         print(len(time))
         total_times.append(len(time))
         print(fitness)

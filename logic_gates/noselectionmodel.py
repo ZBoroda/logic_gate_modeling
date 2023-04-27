@@ -1,9 +1,11 @@
+from collections import Counter
+
 import numpy as np
 
 from logic_gates import Circuit
 
 
-def run_random_walk(f, N: int, mu: float, x_init: Circuit, t_max: int):
+def run_random_walk(f, N: int, mu: float, x_init: Circuit, t_max: int, m_max: int):
     """
     Run evolutionary dynanamics in strong selection weak mutation regime.
 
@@ -22,17 +24,26 @@ def run_random_walk(f, N: int, mu: float, x_init: Circuit, t_max: int):
     X = [x_init]
     x = x_init
     L = len(x_init.genome)
-    neutral = 0
-    neutral_fix = 0
-    while T[-1] < t_max:
+    mutation_counter = Counter()
+    while T[-1] < t_max and len(T) < m_max:
+        if len(T) % 1000 == 0:
+            print(str(len(T)), str(T[-1]), str(F[-1]))
         tau_next = np.random.exponential(1 / (N * mu * L))
         xm = x.duplicate()
         xm.mutate()
+        old_fitness = x.evaluate_expression(f)
+        new_fitness = xm.evaluate_expression(f)
+        s = (new_fitness - old_fitness)
+        if s == 0:
+            mutation_counter["Neutral"] += 1
+        elif s > 0:
+            mutation_counter["Positive"] += 1
+        elif s < 0:
+            mutation_counter["Negative"] += 1
         x = xm.duplicate()
         # update
         F.append(x.evaluate_expression(f))
-        X.append(x)
         T.append(T[-1] + tau_next)
         if F[-1] == 1.0:
             break
-    return np.array(T), np.array(X), np.array(F)
+    return np.array(T), x, np.array(F), mutation_counter

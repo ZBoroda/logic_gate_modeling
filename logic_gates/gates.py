@@ -2,6 +2,7 @@ from abc import abstractmethod, ABC
 import networkx as nx
 import random
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 
 def nand(arg1: bool, arg2: bool):
@@ -32,6 +33,7 @@ class Gate(ABC):
         self.passed = False
         self.evaluated = False
         self.value = False
+        self.contains_loop = False
 
     def reset(self):
         """
@@ -40,6 +42,7 @@ class Gate(ABC):
         self.passed = False
         self.evaluated = False
         self.value = False
+        self.contains_loop = False
 
     @abstractmethod
     def get_value(self) -> bool:
@@ -119,16 +122,24 @@ class NandGate(Gate):
 
         :return: the value of this node
         """
+        if self.contains_loop:
+            raise Exception("I dont think I should ever get here")
+            raise ContainsLoop()
         if not self.allow_loops:
             # this node is in a loop when this method is called again before it has ever evaluated the nand of its
             # inputs. (passed is true so this method has been called once, but evaluated is false)
             if self.passed and not self.evaluated:
                 # print('raised')
+                self.contains_loop = True
                 raise ContainsLoop()
         if self.passed:
             return self.value
         self.passed = True
-        self.value = nand(self.gate1.get_value(), self.gate2.get_value())
+        try:
+            self.value = nand(self.gate1.get_value(), self.gate2.get_value())
+        except ContainsLoop:
+            self.contains_loop = True
+            raise ContainsLoop()
         self.evaluated = True
         return self.value
 
@@ -308,6 +319,7 @@ class Circuit:
             plt.show()
         else:
             plt.savefig(filename, dpi=1000)
+            
     def duplicate(self):
         """
         Returns a copy of this circuit
@@ -348,12 +360,17 @@ class Circuit:
                                   self.gene_addition
                                   ]
         old_genome = self.genome.copy()
+	#Just to check if im getting stuck in here for extended periods of time
+        cnt = 0
         while True:
+            cnt += 1
+            if cnt % 1000 == 0:
+                print("Stuck finding loop less mutation for a while")
             random.choice(possible_mutations)()
             self.construct_circuit()
             if self.allow_loops or not self.contains_loops():
                 break
-            self.genome = old_genome
+            self.genome = old_genome[:]
         # Makes a mutation Question: Do I want to change the number of mutations based on the size of the genome
         # for i in range(1 + int(len(self.genome) / 20)):
         # print(len(self.genome))
@@ -363,9 +380,28 @@ class Circuit:
         Perform a point mutation. Swap one of the spots in the genome for another gate's numbers.
         """
         # print('point')
+        self.construct_circuit()
+        if self.contains_loops():
+            raise Exception("Big error at the beginning gene already has duplicate" + str(i) +str(self.genome))
+        old_genome = self.genome[:]
+        tried_and_failed = defaultdict(set)
         index = random.randrange(len(self.genome))
         new_value = random.randrange(len(self.gates))
         self.genome[index] = new_value
+        self.construct_circuit()
+        cnt = 0
+        while not self.allow_loops and self.contains_loops():
+            self.genome = old_genome[:]
+            tried_and_failed[index].add(new_value)
+            while new_value in tried_and_failed[index]:
+                index = random.randrange(len(self.genome))
+                new_value = random.randrange(len(self.gates))
+                cnt+=1
+            self.genome[index] = new_value
+            self.construct_circuit()
+            cnt += 1
+        return
+
 
     def gene_duplication(self):
         """

@@ -144,9 +144,6 @@ class NandGate(Gate):
         return self.value
 
 
-dynamic_programming_dict = {}
-
-
 class Circuit:
     """
     Circuit is the object that forms the bedrock of the entire project.
@@ -158,7 +155,7 @@ class Circuit:
     index of the output gate.
     """
 
-    def __init__(self, num_inputs, genome, allow_loops: bool = False, use_dp=True):
+    def __init__(self, num_inputs, genome, allow_loops: bool = False, use_dp: bool = True):
         self.allow_loops = allow_loops
         self.num_inputs = num_inputs
         self.genome = genome
@@ -168,6 +165,8 @@ class Circuit:
         self.fitness = 0
         self.graph = None
         self.use_dp = use_dp
+        if self.use_dp:
+            self.dynamic_programming_dict = {}
         self.construct_circuit()
 
     def construct_circuit(self):
@@ -199,12 +198,12 @@ class Circuit:
         resulting input from the expression matches the one provided by the circuit
 
         :param expression:  A boolean expression passed in as a function
-        :param penalize_useless: Whether or not to penalize useless gates (gates that do not effect fitness)
+        :param penalize_useless: Whether to penalize useless gates (gates that do not affect fitness)
         :return: the percentage of matches between this network and the expression
         """
         if self.use_dp:
-            if str(self.genome) in dynamic_programming_dict:
-                self.fitness = dynamic_programming_dict[str(self.genome)]
+            if str(self.genome) in self.dynamic_programming_dict:
+                self.fitness = self.dynamic_programming_dict[str(self.genome)]
                 return self.fitness
         correct_counter = 0
         for i in range(2 ** self.num_inputs):
@@ -226,8 +225,8 @@ class Circuit:
                     useless_gates += 1
             self.fitness -= 0.005 * useless_gates
         if self.use_dp:
-            if str(self.genome) not in dynamic_programming_dict:
-                dynamic_programming_dict[str(self.genome)] = self.fitness
+            if str(self.genome) not in self.dynamic_programming_dict:
+                self.dynamic_programming_dict[str(self.genome)] = self.fitness
         return self.fitness
 
     def contains_loops(self):
@@ -245,6 +244,14 @@ class Circuit:
             except ContainsLoop:
                 return True
         return False
+
+    def num_gates_computing(self) -> int:
+        self.evaluate([True] * self.num_inputs)
+        cnt = 0
+        for gate in self.gates:
+            if gate.evaluated:
+                cnt += 1
+        return cnt
 
     def to_networkx_graph(self, prune: bool = False) -> nx.DiGraph:
         """
@@ -382,11 +389,14 @@ class Circuit:
         # print('point')
         self.construct_circuit()
         if self.contains_loops():
-            raise Exception("Big error at the beginning gene already has duplicate" + str(i) +str(self.genome))
+            raise Exception("Big error at the beginning gene already has duplicate" +str(self.genome))
         old_genome = self.genome[:]
         tried_and_failed = defaultdict(set)
         index = random.randrange(len(self.genome))
-        new_value = random.randrange(len(self.gates))
+        if index == len(self.genome) - 1:
+            new_value = random.randrange(len(self.nand_gates)) + self.num_inputs
+        else:
+            new_value = random.randrange(len(self.gates))
         self.genome[index] = new_value
         self.construct_circuit()
         cnt = 0
@@ -395,7 +405,10 @@ class Circuit:
             tried_and_failed[index].add(new_value)
             while new_value in tried_and_failed[index]:
                 index = random.randrange(len(self.genome))
-                new_value = random.randrange(len(self.gates))
+                if index == len(self.genome) - 1:
+                    new_value = random.randrange(len(self.nand_gates)) + self.num_inputs
+                else:
+                    new_value = random.randrange(len(self.gates))
                 cnt+=1
             self.genome[index] = new_value
             self.construct_circuit()

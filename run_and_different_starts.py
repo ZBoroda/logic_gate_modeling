@@ -3,7 +3,7 @@ First imports
 '''
 import pickle
 
-from logic_gates import run_evolution_strong_selection, run_random_walk, Circuit
+from logic_gates import run_evolution_strong_selection, run_random_walk, Circuit, IsomorphismCounter
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict, Counter
@@ -19,34 +19,6 @@ def construct_genome(size: int) -> list:
         genome += [0, 1]
     genome += [2]
     return genome
-
-
-class IsomorphismCounter:
-
-    def __init__(self, counter = None):
-        if counter == None:
-            self.counter = defaultdict(Counter)
-        else:
-            self.counter = counter
-
-    def add(self, network, size: int):
-        for key in self.counter:
-            if key.is_isomorphic(network, pruned=True):
-                self.counter[key][size] += 1
-                self.counter[key]["total"] += 1
-                return key
-        self.counter[network][size] += 1
-        self.counter[network]["total"] += 1
-        return network
-
-    def get_networks(self):
-        return self.counter.keys()
-
-    def get_number_by_size(self, size: int):
-        return {key: value[size] for key, value in self.counter.items()}
-
-    def get_number_networks_total(self):
-        return {key: value['total'] for key, value in self.counter.items()}
 
 
 def run_in_parallel(function, axis, num_itter, size, isomorphism_counter, *args):

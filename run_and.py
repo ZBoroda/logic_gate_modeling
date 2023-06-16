@@ -3,12 +3,11 @@ First imports
 '''
 import pickle
 
-from logic_gates import run_evolution_strong_selection, run_random_walk, Circuit
+from logic_gates import run_evolution_strong_selection, run_random_walk, Circuit, IsomorphismCounter, run_in_parallel_same_start
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict, Counter
 from tqdm.notebook import tqdm
-import concurrent.futures
 from goals import and_funct
 import time
 
@@ -20,60 +19,14 @@ def construct_genome(size: int) -> list:
     genome += [2]
     return genome
 
-
-class IsomorphismCounter:
-
-    def __init__(self, counter = None):
-        if counter == None:
-            self.counter = defaultdict(Counter)
-        else:
-            self.counter = counter
-
-    def add(self, network, size: int):
-        for key in self.counter:
-            if key.is_isomorphic(network, pruned=True):
-                self.counter[key][size] += 1
-                self.counter[key]["total"] += 1
-                return key
-        self.counter[network][size] += 1
-        self.counter[network]["total"] += 1
-        return network
-
-    def get_networks(self):
-        return self.counter.keys()
-
-    def get_number_by_size(self, size: int):
-        return {key: value[size] for key, value in self.counter.items()}
-
-    def get_number_networks_total(self):
-        return {key: value['total'] for key, value in self.counter.items()}
-
-
-def run_in_parallel(function, axis, num_itter, size, isomorphism_counter, *args):
-    total_times = []
-    total_mutations = []
-    total_mutations_counter = Counter()
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        future_results = [executor.submit(function, *args) for _ in range(num_itter)]
-        for f in concurrent.futures.as_completed(future_results):
-            mutationtimes, circuit, fitness, mutation_counter = f.result()
-            axis.plot(fitness)
-            if fitness[-1] == 1:
-                total_mutations.append(len(mutationtimes))
-                total_times.append(mutationtimes[-1])
-                isomorphism_counter.add(circuit, size)
-                total_mutations_counter += mutation_counter
-            else:
-                print("uh oh didnt get to full fitness")
-        return total_mutations, total_times, {key: value / num_itter for key, value in total_mutations_counter.items()}
-
 def dump_data(data, filename):
     with open('andlargesize/' + filename + '.pickle', 'wb') as f:
         pickle.dump(data, f)
 
 if __name__ == "__main__":
     sizes = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 20, 40, 60, 80, 100, 200, 300, 400, 500, 1000, 1500, 2000]
-    fig_trajectory, ax_trajectories = plt.subplots(len(sizes), 1, sharex=True, sharey=True, figsize=(9, 20))
+    fig_fitness_trajectory, ax_fitness_trajectories = plt.subplots(len(sizes), 1, sharex=True, sharey=True, figsize=(9, 20))
+    fig_computing_trajectory, ax_computing_trajectories = plt.subplots(len(sizes), 1, sharex=True, sharey=True, figsize=(9, 20))
     fig_histogram_mutations, ax_histograms_mutations = plt.subplots(len(sizes), 1, sharex=True, sharey=True,
                                                                     figsize=(9, 20))
     fig_histogram_times, ax_histograms_times = plt.subplots(len(sizes), 1, sharex=True, sharey=True, figsize=(9, 20))
@@ -97,21 +50,21 @@ if __name__ == "__main__":
     mutation_types_list = []
     mutation_types_list_random = []
     num_trials = 100
-    for size, ax_trajectory, ax_histogram_mutation, ax_histogram_times, ax_trajectory_random, ax_histogram_random in \
+    for size, ax_fitness_trajectory, ax_computing_trajectory, ax_histogram_mutation, ax_histogram_times, ax_trajectory_random, ax_histogram_random in \
             zip(
-            sizes, ax_trajectories,
+            sizes, ax_fitness_trajectories, ax_computing_trajectories,
             ax_histograms_mutations,
             ax_histograms_times,
             ax_trajectories_random,
             ax_histograms_random):
-        ax_trajectory.set_title(size)
+        ax_fitness_trajectory.set_title(size)
         ax_histogram_mutation.set_title(size)
         ax_histogram_times.set_title(size)
         ax_trajectory_random.set_title(size)
         ax_histogram_random.set_title(size)
         initial_circuit = Circuit(2, construct_genome(size))
         print(size)
-        mutations, times, mutation_types = run_in_parallel(run_evolution_strong_selection, ax_trajectory, num_trials, size,
+        mutations, times, mutation_types = run_in_parallel_same_start(run_evolution_strong_selection, ax_trajectory, num_trials, size,
                                            isomorphism_counter, and_funct, 1000, 0.1, initial_circuit, 10000, 500000)
         mutation_types_list.append(mutation_types)
         times_array = np.array(times)
@@ -127,7 +80,7 @@ if __name__ == "__main__":
         print("STD mutations:" + str(stds_mutations[-1]))
         ax_histogram_mutation.hist(mutations, 20)
         ax_histogram_times.hist(times, 20)
-        mutations_random, times_random, mutation_types_random = run_in_parallel(run_random_walk, ax_trajectory_random, num_trials, size,
+        mutations_random, times_random, mutation_types_random = run_in_parallel_same_start(run_random_walk, ax_trajectory_random, num_trials, size,
                                            isomorphism_counter_random, and_funct, 1000, 0.1, initial_circuit, 10000, 500000)
         mutation_types_list_random.append(mutation_types_random)
         random_mutations_array = np.array(mutations_random)
@@ -162,7 +115,7 @@ if __name__ == "__main__":
     dump_data(sizes, "sizes")
 
 
-    fig_trajectory.savefig('trajectories_and_big.png', dpi=1200)
+    fig_fitness_trajectory.savefig('trajectories_and_big.png', dpi=1200)
     fig_histogram_mutations.suptitle("Histogram of Number of Mutations")
     fig_histogram_mutations.savefig('histogram_fixations_mutations_and_big.png')
     fig_histogram_times.suptitle("Histogram of Fixation Times")

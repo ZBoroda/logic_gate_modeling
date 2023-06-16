@@ -19,6 +19,7 @@ def run_evolution_strong_selection(f, N: int, mu: float, x_init: Circuit, t_max:
     n = 0
     T = [0.0]
     F = [x_init.evaluate_expression(f)]
+    C = [] #C is the number of computing nodes
     mutation_counter = Counter()
     #X = [x_init]
     x = x_init
@@ -58,9 +59,10 @@ def run_evolution_strong_selection(f, N: int, mu: float, x_init: Circuit, t_max:
             elif s < 0:
                 mutation_counter["Negative"] += 1
         # update
+        C.append(x.num_gates_computing())
         F.append(x.evaluate_expression(f))
         #X.append(x)
         T.append(T[-1] + tau_next)
         if F[-1] == 1.0:
             break
-    return np.array(T), x, np.array(F), mutation_counter
+    return np.array(T), x, np.array(F), mutation_counter, np.array(C)

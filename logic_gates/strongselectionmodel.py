@@ -1,6 +1,7 @@
 import numpy as np
 from collections import Counter
 from logic_gates import Circuit
+from scipy.spatial.distance import hamming
 
 
 def run_evolution_strong_selection(f, N: int, mu: float, x_init: Circuit, t_max: int, m_max: int):
@@ -27,8 +28,8 @@ def run_evolution_strong_selection(f, N: int, mu: float, x_init: Circuit, t_max:
     neutral = 0
     neutral_fix = 0
     while T[-1] < t_max and len(T) < m_max:
-        if len(T) % 1000 == 0:
-            print(str(len(T)), str(T[-1]), str(F[-1]))
+        if len(T) % 10000 == 0:
+            print('\t', str(len(T)), str(T[-1]), str(F[-1]))
         tau_next = np.random.exponential(1 / (N * mu * L))
         xm = x.duplicate()
         xm.mutate()
@@ -65,4 +66,4 @@ def run_evolution_strong_selection(f, N: int, mu: float, x_init: Circuit, t_max:
         T.append(T[-1] + tau_next)
         if F[-1] == 1.0:
             break
-    return np.array(T), x, np.array(F), mutation_counter, np.array(C)
+    return np.array(T), x, np.array(F), mutation_counter, np.array(C), hamming(x.genome, x_init.genome) * len(x.genome)

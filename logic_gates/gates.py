@@ -155,7 +155,7 @@ class Circuit:
     index of the output gate.
     """
 
-    def __init__(self, num_inputs, genome, allow_loops: bool = False, use_dp: bool = True):
+    def __init__(self, num_inputs, genome, allow_loops: bool = False, use_dp: bool = False):
         self.allow_loops = allow_loops
         self.num_inputs = num_inputs
         self.genome = genome
@@ -168,6 +168,8 @@ class Circuit:
         if self.use_dp:
             self.dynamic_programming_dict = {}
         self.construct_circuit()
+        self.evaluated = False
+        self.evaluated_dict = {}
 
     def construct_circuit(self):
         """
@@ -201,6 +203,8 @@ class Circuit:
         :param penalize_useless: Whether to penalize useless gates (gates that do not affect fitness)
         :return: the percentage of matches between this network and the expression
         """
+        if self.evaluated:
+            return self.evaluated_dict[expression]
         if self.use_dp:
             if str(self.genome) in self.dynamic_programming_dict:
                 self.fitness = self.dynamic_programming_dict[str(self.genome)]
@@ -227,6 +231,8 @@ class Circuit:
         if self.use_dp:
             if str(self.genome) not in self.dynamic_programming_dict:
                 self.dynamic_programming_dict[str(self.genome)] = self.fitness
+        self.evaluated = True
+        self.evaluated_dict[expression] = self.fitness
         return self.fitness
 
     def contains_loops(self):
@@ -413,6 +419,8 @@ class Circuit:
             self.genome[index] = new_value
             self.construct_circuit()
             cnt += 1
+        if index == len(self.genome) - 1 or self.nand_gates[index // 2].evaluated:
+            self.evaluated = False
         return
 
 

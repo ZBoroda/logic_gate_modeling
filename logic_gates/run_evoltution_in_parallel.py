@@ -1,7 +1,7 @@
 from collections import Counter
 import concurrent.futures
 
-def run_in_parallel_same_start(function, num_itter, size, isomorphism_counter, *args):
+def run_in_parallel_same_start(function, num_itter, size, isomorphism_counter=None, *args):
     total_times = []
     total_mutations = []
     total_final_distance = []
@@ -19,7 +19,8 @@ def run_in_parallel_same_start(function, num_itter, size, isomorphism_counter, *
             total_times.append(mutation_times[-1])
             if fitness[-1] == 1:
                 total_mutations_counter += mutation_counter
-                isomorphism_counter.add(circuit, size)
+                if isomorphism_counter is not None:
+                    isomorphism_counter.add(circuit, size)
             else:
                 print("uh oh didnt get to full fitness")
         return total_mutations, total_times, total_final_distance, {key: value / num_itter for key, value in

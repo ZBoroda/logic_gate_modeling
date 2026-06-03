@@ -373,13 +373,16 @@ class Circuit:
                                   self.gene_addition
                                   ]
         old_genome = self.genome.copy()
-	#Just to check if im getting stuck in here for extended periods of time
         cnt = 0
         while True:
             cnt += 1
             if cnt % 1000 == 0:
                 print("Stuck finding loop less mutation for a while")
             random.choice(possible_mutations)()
+            # point_mutation handles its own loop detection and construct_circuit
+            # internally, so skip the redundant check for the Basic model
+            if model_type == 'Basic':
+                break
             self.construct_circuit()
             if self.allow_loops or not self.contains_loops():
                 break

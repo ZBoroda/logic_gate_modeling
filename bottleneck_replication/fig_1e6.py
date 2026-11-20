@@ -165,11 +165,15 @@ def main():
                     mew=0.6, lw=1, zorder=3, label=r'$\alpha=1$ mean')
         ax.plot(r[:, 0], r[:, 3], 's', ms=6, mfc='white', mec=COL[1.0], mew=1.3,
                 label=r'$\alpha=1$ median')
+    ax.plot([], [], color='#555', lw=1.2, ls='--', label=r'slope $\min\{1, 2(1-\alpha)\}$')
     ax.set(xscale='log', yscale='log', xlabel='network size $N$',
            ylabel=r'total mutations to AND, $\langle M \rangle$')
-    ax.legend(frameon=False, fontsize=10, ncol=2, loc='upper left')
-    ax.text(0.98, 0.03, r'dashed: slope $\min\{1, 2(1-\alpha)\}$', transform=ax.transAxes,
-            ha='right', fontsize=9, color=MUTED)
+    h, l = ax.get_legend_handles_labels()
+    order = [r'$\alpha=0$ (+ exact curve)', r'$\alpha=0.5$', r'$\alpha=0.6$', r'$\alpha=0.75$',
+             r'$\alpha=0.9$', r'$\alpha=1$ mean', r'$\alpha=1$ median', r'slope $\min\{1, 2(1-\alpha)\}$']
+    idx = [l.index(o) for o in order if o in l]
+    ax.legend([h[i] for i in idx], [l[i] for i in idx], frameon=False, fontsize=10, ncol=2,
+              loc='upper left')
     style(ax, 'C   total: set by the bottleneck step')
 
     # D: exponents
@@ -213,7 +217,7 @@ def main():
                         ('D', dict(mfc='white', mec='#555', mew=1.6), r'total, simulation ($10^4$–$10^6$)'),
                         ('+', dict(color='#333', mew=2, ms=11), r'total, two-step theory ($10^4$–$10^6$)')]:
         ax.plot([], [], mk, ls='none', ms=kw.pop('ms', 8), label=lab, **kw)
-    ax.set(xlim=(-0.05, 1.05), ylim=(-0.08, 1.12), xlabel=r'module exponent $\alpha$  ($L \simeq N^\alpha$)',
+    ax.set(xlim=(-0.05, 1.05), ylim=(-0.12, 1.12), xlabel=r'module exponent $\alpha$  ($L \simeq N^\alpha$)',
            ylabel='scaling exponent')
     ax.legend(frameon=False, fontsize=9.5, loc='lower left')
     style(ax, r'D   exponents ($10^2 \leq N \leq 10^6$)')

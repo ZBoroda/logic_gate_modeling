@@ -70,6 +70,8 @@ warmup()  # ~1-2s first time, instant after
 - **`_computing_order_numba`** — backward BFS from output gate to find the computing subgraph (typically 3–10 nodes regardless of N); evaluation only visits these nodes
 - **`_fitness_numba`** — evaluates all 4 input pairs in a single JIT call
 
+See [ALGORITHM.md](ALGORITHM.md) for pseudocode, a complexity analysis, and a comparison with the algorithm note.
+
 ## Testing
 
 ```bash

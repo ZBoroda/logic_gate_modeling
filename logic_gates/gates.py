@@ -391,6 +391,28 @@ class Circuit:
         # for i in range(1 + int(len(self.genome) / 20)):
         # print(len(self.genome))
 
+    def _draw_mutation(self, genome):
+        """
+        Draw (genome index, new source) as in the paper's Methods (Sec. 6.2): a uniform
+        edge, then a uniform new source that differs from the current one. An edge into
+        a NAND gate may take any node except its current source and the gate itself; the
+        output edge may take any NAND gate except the current one.
+        """
+        while True:
+            index = random.randrange(len(genome))
+            if index == len(genome) - 1:
+                if len(self.nand_gates) < 2:
+                    continue                      # output edge has no alternative
+                new_value = genome[index]
+                while new_value == genome[index]:   # uniform over the other gates
+                    new_value = random.randrange(len(self.nand_gates)) + self.num_inputs
+            else:
+                self_node = index // 2 + self.num_inputs
+                new_value = genome[index]
+                while new_value == genome[index] or (new_value == self_node and not self.allow_loops):
+                    new_value = random.randrange(len(self.gates))
+            return index, new_value
+
     def point_mutation(self):
         """
         Perform a point mutation. Swap one of the spots in the genome for another gate's numbers.
@@ -401,11 +423,7 @@ class Circuit:
             raise Exception("Big error at the beginning gene already has duplicate" +str(self.genome))
         old_genome = self.genome[:]
         tried_and_failed = defaultdict(set)
-        index = random.randrange(len(self.genome))
-        if index == len(self.genome) - 1:
-            new_value = random.randrange(len(self.nand_gates)) + self.num_inputs
-        else:
-            new_value = random.randrange(len(self.gates))
+        index, new_value = self._draw_mutation(old_genome)
         self.genome[index] = new_value
         self.construct_circuit()
         cnt = 0
@@ -413,11 +431,7 @@ class Circuit:
             self.genome = old_genome[:]
             tried_and_failed[index].add(new_value)
             while new_value in tried_and_failed[index]:
-                index = random.randrange(len(self.genome))
-                if index == len(self.genome) - 1:
-                    new_value = random.randrange(len(self.nand_gates)) + self.num_inputs
-                else:
-                    new_value = random.randrange(len(self.gates))
+                index, new_value = self._draw_mutation(old_genome)
                 cnt+=1
             self.genome[index] = new_value
             self.construct_circuit()

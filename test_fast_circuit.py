@@ -150,6 +150,74 @@ def test_convergence(sizes=(5, 20, 80), n_trials=30):
 
 # ── test 6: speed benchmark ───────────────────────────────────────────────────
 
+def exact_mutation_distribution(genome):
+    """
+    Exact probability of each (index, new_value) under the paper's Methods:
+    uniform edge, then uniform source among the edge's L_e options (current
+    source and, for gate edges, the gate itself excluded); cyclic pairs are
+    redrawn, so P(pair) is proportional to 1/L_e over acyclic pairs.
+    """
+    n_gates = (len(genome) - 1) // 2
+    probs = {}
+    for idx in range(len(genome)):
+        if idx == len(genome) - 1:
+            opts = [v for v in range(2, n_gates + 2) if v != genome[idx]]
+        else:
+            opts = [v for v in range(n_gates + 2) if v not in (genome[idx], idx // 2 + 2)]
+        for v in opts:
+            g2 = list(genome); g2[idx] = v
+            if not FastCircuit(g2).has_cycle():
+                probs[(idx, v)] = 1.0 / len(opts)
+    Z = sum(probs.values())
+    return {k: p / Z for k, p in probs.items()}
+
+
+def test_mutation_distribution(n_samples=60000, alpha=0.001):
+    """Single-mutation (index, new_value) frequencies match the Methods weights exactly."""
+    from scipy.stats import chisquare
+    print("\n[mutation distribution] FastCircuit and Circuit vs exact Methods weights")
+    genomes = [construct_genome(4),                       # parallel start
+               [0, 1, 2, 2, 3, 3, 4, 4, 5],              # chain of 4 (many cyclic pairs)
+               [0, 1, 0, 2, 3, 1, 2, 4, 5]]              # mixed DAG
+    for genome in genomes:
+        exact = exact_mutation_distribution(genome)
+        keys = sorted(exact)
+        for name, mutate in [
+            ("FastCircuit", lambda: _fast_mutation(genome)),
+            ("Circuit", lambda: _circuit_mutation(genome)),
+        ]:
+            random.seed(7)
+            counts = dict.fromkeys(keys, 0)
+            n = n_samples if name == "FastCircuit" else n_samples // 6
+            for _ in range(n):
+                k = mutate()
+                assert k in counts, f"{name} produced invalid mutation {k} from {genome}"
+                counts[k] += 1
+            obs = np.array([counts[k] for k in keys])
+            exp = np.array([exact[k] * n for k in keys])
+            p = chisquare(obs, exp).pvalue
+            print(f"  {name:11s} genome={genome}: {len(keys)} pairs, chi2 p={p:.3f}")
+            assert p > alpha
+
+
+def _diff(old, new):
+    d = [i for i in range(len(old)) if old[i] != new[i]]
+    assert len(d) == 1, (old, new)
+    return d[0], int(new[d[0]])
+
+
+def _fast_mutation(genome):
+    x = FastCircuit(genome)
+    x.mutate()
+    return _diff(genome, x.genome.tolist())
+
+
+def _circuit_mutation(genome):
+    c = Circuit(2, list(genome))
+    c.point_mutation()
+    return _diff(genome, c.genome)
+
+
 def benchmark(n_trials=30):
     print(f"\n[6] Speed benchmark ({n_trials} trials per config)")
 
@@ -177,6 +245,7 @@ if __name__ == "__main__":
     warmup()
     test_evaluation_correctness()
     test_fitness_correctness()
+    test_mutation_distribution()
     test_rw_distribution()
     test_ss_distribution()
     test_convergence()

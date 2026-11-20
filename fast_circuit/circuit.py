@@ -255,19 +255,33 @@ class FastCircuit:
         return c
 
     def mutate(self):
-        """In-place point mutation with cycle rejection. Retries until acyclic."""
+        """
+        In-place point mutation with cycle rejection. Retries until acyclic.
+
+        Follows the paper's Methods (Sec. 6.2): a uniform edge, then a uniform new
+        source different from the current one. An edge into a NAND gate may take
+        any node except its current source and the gate itself; the output edge
+        any NAND gate except the current one. Cyclic proposals are redrawn
+        (edge and source) and not counted.
+        """
         n_gates = (len(self.genome) - 1) // 2
         n_all = NUM_INPUTS + n_gates
         n_nodes = n_all
 
         while True:
             idx = random.randrange(len(self.genome))
-            if idx == len(self.genome) - 1:
-                new_val = random.randrange(n_gates) + NUM_INPUTS
-            else:
-                new_val = random.randrange(n_all)
-
             old_val = int(self.genome[idx])
+            if idx == len(self.genome) - 1:
+                if n_gates < 2:
+                    continue                          # output edge has no alternative
+                new_val = old_val
+                while new_val == old_val:             # uniform over the other N-1 gates
+                    new_val = random.randrange(n_gates) + NUM_INPUTS
+            else:
+                self_node = idx // 2 + NUM_INPUTS
+                new_val = old_val
+                while new_val == old_val or new_val == self_node:   # uniform over N options
+                    new_val = random.randrange(n_all)
             self.genome[idx] = new_val
 
             full_order, full_len = _topo_order_numba(self.genome, NUM_INPUTS)

@@ -92,3 +92,132 @@ def enumerate_p(genome, Np=1e4, target=AND):
     """(p_sigma, beneficial fraction) of a genotype under the Methods weights."""
     g = np.asarray(genome, dtype=np.int64).copy()
     return _enumerate(g, target, pfix_table(Np))
+
+
+# ── exact p_sigma in O(16 L) for a chain module in a pristine reservoir ───────
+
+@numba.njit(cache=True)
+def _nand(a, b):
+    return (~(a & b)) & 0xF
+
+
+@numba.njit(cache=True)
+def _p_chain_reservoir(N, L, k, target, pfix):
+    """
+    Same quantity as enumerate_p, for the genotypes of starts.interpolating(N, L)
+    (k = 0) and starts.bottleneck_state(N, L, k) (k odd >= 3), without looping
+    over sources one by one.
+
+    Idea: rewiring an input of chain gate j changes only v_j, and the output is
+    then Phi_j(v_j), where Phi_j (a 16-entry table) composes the chain below j.
+    The result depends on the new source only through its truth table, so it is
+    enough to count the acyclic candidate sources (non-descendants of j) by
+    truth-table value. Reservoir gates outside the module are neutral.
+    """
+    I1, I2, RES = 0b1100, 0b1010, 0b0111        # NAND(I1, I2) = 0b0111
+    # chain values v[1..L]
+    v = np.zeros(L + 1, dtype=np.int64)
+    v[1] = _nand(I1, I2)
+    for j in range(2, L + 1):
+        v[j] = _nand(RES, v[j - 1]) if j == k else _nand(v[j - 1], v[j - 1])
+    # Phi[j][t]: output if v_j is replaced by t
+    phi = np.zeros((L + 1, 16), dtype=np.int64)
+    for t in range(16):
+        phi[L, t] = t
+    for j in range(L, 1, -1):
+        for t in range(16):
+            g = _nand(RES, t) if j == k else _nand(t, t)
+            phi[j - 1, t] = phi[j, g]
+
+    def gain(out, m0):
+        return POPCOUNT4[(~(out ^ target)) & 0xF] - m0
+
+    m0 = POPCOUNT4[(~(v[L] ^ target)) & 0xF]
+    n_res = N - L
+    w_valid = 0.0
+    w_win = 0.0
+    w_ben = 0.0
+    wg = 1.0 / N
+    prefix = np.zeros(16, dtype=np.int64)       # value counts of chain gates 1..j-1
+    cnt = np.zeros(16, dtype=np.int64)
+    for j in range(1, L + 1):
+        # the two input edges of chain gate j: (current source value, other input value)
+        for slot in range(2):
+            if j == 1:
+                cur = I1 if slot == 0 else I2
+                w = I2 if slot == 0 else I1
+            elif j == k:
+                cur = RES if slot == 0 else v[j - 1]       # slot 0 is the recruited copy x
+                w = v[j - 1] if slot == 0 else RES
+            else:
+                cur = v[j - 1]
+                w = v[j - 1]
+            for t in range(16):
+                cnt[t] = prefix[t]
+            cnt[I1] += 1
+            cnt[I2] += 1
+            cnt[RES] += n_res
+            cnt[cur] -= 1
+            for t in range(16):
+                c = cnt[t]
+                if c == 0:
+                    continue
+                w_valid += c * wg
+                d = gain(phi[j, _nand(t, w)], m0)
+                if d > 0:
+                    w_ben += c * wg
+                    w_win += c * wg * pfix[d + 4]
+        prefix[v[j]] += 1
+    # output edge: any gate other than chain gate L
+    wo = 1.0 / (N - 1)
+    for t in range(16):
+        cnt[t] = 0
+    for j in range(1, L):
+        cnt[v[j]] += 1
+    cnt[RES] += n_res
+    for t in range(16):
+        c = cnt[t]
+        if c == 0:
+            continue
+        w_valid += c * wo
+        d = gain(t, m0)
+        if d > 0:
+            w_ben += c * wo
+            w_win += c * wo * pfix[d + 4]
+    # reservoir gates not feeding the module: 2 edges x N acyclic sources, neutral
+    n_free = n_res - (1 if k > 0 else 0)
+    w_valid += 2 * n_free * N * wg
+    # the recruited copy x (k > 0): its value feeds chain gate k
+    if k > 0:
+        for slot in range(2):
+            cur = I1 if slot == 0 else I2
+            w = I2 if slot == 0 else I1
+            for t in range(16):
+                cnt[t] = 0
+            for j in range(1, k):
+                cnt[v[j]] += 1
+            cnt[I1] += 1
+            cnt[I2] += 1
+            cnt[RES] += n_res - 1
+            cnt[cur] -= 1
+            for t in range(16):
+                c = cnt[t]
+                if c == 0:
+                    continue
+                w_valid += c * wg
+                d = gain(phi[k, _nand(_nand(t, w), v[k - 1])], m0)
+                if d > 0:
+                    w_ben += c * wg
+                    w_win += c * wg * pfix[d + 4]
+    return w_win / w_valid, w_ben / w_valid
+
+
+def p_chain_reservoir(N, L, k=0, Np=1e4, target=AND):
+    """Exact (p_sigma, beneficial fraction) for interpolating(N, L) or bottleneck_state(N, L, k)."""
+    return _p_chain_reservoir(N, L, k, target, pfix_table(Np))
+
+
+def bottleneck_k(L):
+    """Odd chain gate near the middle of the module, as in the note's Table 4."""
+    k = L // 2
+    return max(3, k if k % 2 else k + 1)

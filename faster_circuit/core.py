@@ -134,6 +134,35 @@ def matches(genome, target, memo, stamp, epoch, stack):
 
 
 @numba.njit(cache=True)
+def mark_module(genome, in_mod, mod_list, n_old, stack):
+    """
+    Recompute the computing module (gates that are ancestors of the output, the
+    output gate included). Clears the previous n_old flags, then walks backwards
+    from the output. Returns the new module size. Cost O(old + new module size).
+    """
+    for i in range(n_old):
+        in_mod[mod_list[i]] = False
+    n = 0
+    sp = 0
+    stack[sp] = genome[len(genome) - 1]
+    sp += 1
+    while sp > 0:
+        sp -= 1
+        v = stack[sp]
+        if v < 2 or in_mod[v]:
+            continue
+        in_mod[v] = True
+        mod_list[n] = v
+        n += 1
+        g = v - 2
+        stack[sp] = genome[2 * g]
+        sp += 1
+        stack[sp] = genome[2 * g + 1]
+        sp += 1
+    return n
+
+
+@numba.njit(cache=True)
 def _run_one(genome, target, pfix, m_max, counts):
     """
     One SSWM run, in place on `genome`. Returns the number of mutations M.
@@ -147,9 +176,12 @@ def _run_one(genome, target, pfix, m_max, counts):
     mstamp = np.zeros(n_nodes, dtype=np.int64)
     sstamp = np.zeros(n_nodes, dtype=np.int64)
     stack = np.empty(2 * n_nodes + 4, dtype=np.int64)
+    in_mod = np.zeros(n_nodes, dtype=np.bool_)          # ancestors of the output
+    mod_list = np.empty(n_nodes, dtype=np.int64)
     epoch = 1
 
     m = matches(genome, target, memo, mstamp, epoch, stack)
+    n_mod = mark_module(genome, in_mod, mod_list, 0, stack)
     M = 0
     while m < 4 and M < m_max:
         e = np.random.randint(0, L)
@@ -178,12 +210,21 @@ def _run_one(genome, target, pfix, m_max, counts):
                     continue                             # cyclic: redraw, not counted
             genome[e] = new                              # mutate in place
 
-        epoch += 1
-        m2 = matches(genome, target, memo, mstamp, epoch, stack)
+        # A gate outside the computing module cannot affect the output, so its
+        # mutations are neutral without evaluation. (Same random draws either
+        # way: this changes cost, never results.)
+        touches_module = e == L - 1 or in_mod[e // 2 + 2]
+        if touches_module:
+            epoch += 1
+            m2 = matches(genome, target, memo, mstamp, epoch, stack)
+        else:
+            m2 = m
         counts[m] += 1
         M += 1
         if np.random.random() < pfix[m2 - m + 4]:
             m = m2                                       # fixes
+            if touches_module:                           # module may have changed
+                n_mod = mark_module(genome, in_mod, mod_list, n_mod, stack)
         else:
             genome[e] = old                              # lost: revert
     return M

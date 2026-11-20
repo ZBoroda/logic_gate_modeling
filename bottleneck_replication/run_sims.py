@@ -67,7 +67,10 @@ def path(engine, alpha, N):
 
 
 def seed_base(engine, alpha, N):
-    return (int(round(alpha * 100)) * 100_000 + N) * 10_000 + (0 if engine == 'faster' else 5_000)
+    if engine == 'faster':      # Numba's RNG accepts 64-bit seeds
+        return (int(round(alpha * 100)) * 100_000 + N) * 10_000
+    # numpy's legacy seed must fit in 32 bits: config index * 100k
+    return configs().index((alpha, N)) * 100_000 + 50_000
 
 
 # ── fast_circuit engine (one trial per task) ──────────────────────────────────

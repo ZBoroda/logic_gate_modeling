@@ -186,7 +186,7 @@ def _p_chain_reservoir(N, L, k, target, pfix):
             w_win += c * wo * pfix[d + 4]
     # reservoir gates not feeding the module: 2 edges x N acyclic sources, neutral
     n_free = n_res - (1 if k > 0 else 0)
-    w_valid += 2 * n_free * N * wg
+    w_valid += 2.0 * n_free * N * wg               # float: avoids int64 overflow at large N
     # the recruited copy x (k > 0): its value feeds chain gate k
     if k > 0:
         for slot in range(2):

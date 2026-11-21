@@ -47,3 +47,35 @@ python test_faster_circuit.py
 ```
 
 The tests check fitness against `FastCircuit` (300 random DAGs × 16 targets) and the local cycle test against `FastCircuit`'s global topological sort. They also compare simulated ⟨M⟩ and first-step means against the exact parallel-start formulas.
+
+## Observables: computing edges and P(b|c) (`observe.py`)
+
+`run_observed(f, Np, genome, n_trials, seed, p_res, k_edges, random_walk)` is the
+same simulation as `run_batch`, bit for bit (same M, same fixations), and also
+records per run, in `stats` (columns `STAT_COLS`):
+
+- fixating / lost mutations by type (beneficial, deleterious, neutral)
+- computing edges of each resident network (initial + every fixed mutant), summed
+- f_b of the residents: the fraction of beneficial alternatives per computing
+  edge, averaged over a resident's computing edges (Methods 6.5)
+
+Per-genotype helpers:
+
+```python
+from faster_circuit import computing_edges, p_c, p_b_given_c
+computing_edges(genome)        # 2 |module| + 1 edges on an input -> output path
+p_c(genome)                    # computing edges / (2N + 1)
+p_b_given_c(genome, and_funct) # exact mean f_b over computing edges
+```
+
+`p_b_given_c` does not try sources one by one. Rewiring an input of gate v only
+changes v's truth table, to NAND(t, w), so the output depends only on the new
+source's truth table t. It counts the allowed sources by truth table: all nodes,
+minus the descendants of v (they would close a cycle), minus v and the current
+source. That costs O(|desc(v)| + 16 |module|) per edge. It is tested against brute
+force over 300 random DAGs (`test_observe.py`).
+
+For large runs, `p_res = -R` measures f_b on about R uniformly chosen residents per
+run, replaying the run with the same seed. `k_edges` caps the number of
+computing edges per resident, which are then sampled uniformly. Both choices
+keep the estimate unbiased.

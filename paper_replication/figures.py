@@ -443,13 +443,21 @@ def fig2(outdir):
     paper: 54 genotypes), restyled."""
     import networkx as nx
     from matplotlib.patches import Patch
-    import gen_fig2 as g2
-    from fast_circuit.circuit import _target_array
+    import gen_fig2 as g2                              # graph construction only
+    from faster_circuit.core import fitness, has_cycle_via
     from goals import and_funct
-    g2.warmup()
-    target = _target_array(and_funct)
-    genotypes, p0, p1, outs = g2.enumerate_genotypes()
-    fit_ = {g: g2.compute_fitness(*g, target) for g in genotypes}
+    # canonical genotypes as in gen_fig2.py (unordered input pairs), but fitness and
+    # acyclicity from faster_circuit
+    p0 = sorted((a, b) for a in range(4) for b in range(a, 4) if 2 not in (a, b))
+    p1 = sorted((a, b) for a in range(4) for b in range(a, 4) if 3 not in (a, b))
+    outs = [2, 3]
+
+    def acyclic(a, b):
+        g = [a[0], a[1], 0, 0, 2]
+        return not any(has_cycle_via(g, 3, u) for u in b)
+
+    genotypes = [(a, b, o) for a in p0 for b in p1 for o in outs if acyclic(a, b)]
+    fit_ = {g: fitness([*g[0], *g[1], g[2]], and_funct) for g in genotypes}
     G = g2.build_graph(genotypes, p0, p1, outs)
     pos = nx.spring_layout(G, seed=7, k=1.8, iterations=300)
     fig, ax = plt.subplots(figsize=(10, 8.5))

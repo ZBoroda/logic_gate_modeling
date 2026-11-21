@@ -327,10 +327,11 @@ def fig1(outdir):
     for (_, y0), (_, y1) in zip(steps[:-1], steps[1:]):
         ax.annotate('', xy=(5.0, y1 + 0.67), xytext=(5.0, y0 - 0.67),
                     arrowprops=dict(arrowstyle='-|>', color=INK, lw=1.1))
-    ax.annotate('', xy=(9.0, 8.6), xytext=(9.0, 3.1),
-                arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=1.1,
-                                connectionstyle='arc3,rad=-0.5'))
-    ax.text(9.95, 5.85, 'repeat', rotation=90, ha='center', va='center', fontsize=9, color=MUTED)
+    # return path: out of the right edge of "fixed/lost", up outside the boxes, into "resident"
+    ax.plot([9.05, 9.55, 9.55], [3.1, 3.1, 8.6], color=MUTED, lw=1.1, solid_joinstyle='round')
+    ax.annotate('', xy=(9.05, 8.6), xytext=(9.55, 8.6),
+                arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=1.1, shrinkA=0, shrinkB=0))
+    ax.text(9.85, 5.85, 'repeat', rotation=90, ha='center', va='center', fontsize=9, color=MUTED)
     ax.text(5.0, -0.1, '$M$ counts every proposed mutation, fixed or lost', ha='center',
             fontsize=9, color=MUTED)
     save(fig, 'fig1_model.png', outdir)

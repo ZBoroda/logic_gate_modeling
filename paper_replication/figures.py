@@ -417,7 +417,8 @@ def fig3(outdir, big):
     fitline(ax, rl, BLUE, label_fmt='non-fixating fit $y={A:.3g}\\,N^{{{b:.2f}}}$')
     ax.legend(loc='upper left', fontsize=9)
     note(ax, 'paper: non-fixating $9.5\\,N^{0.96}$; fixating ≈ const.\n'
-             'fixating neutral mutations ≈ $\\langle M\\rangle / N_P$ grow once $N \\gtrsim N_P/10$')
+             'fixating neutral mutations ≈ $\\langle M\\rangle / N_P$ grow once $N \\gtrsim N_P/10$',
+         loc=(0.02, 0.70), ha='left', va='top')
     title(ax, 'C   fixating vs non-fixating mutations')
 
     ax = axs[1, 1]
@@ -436,7 +437,7 @@ def fig3(outdir, big):
 
 # ── figure 4: origin of linear scaling ────────────────────────────────────────
 
-def mech_panels(axs, exp, big, color, ce_ref=None):
+def mech_panels(axs, exp, big, color, ce_ref=None, dloc=dict(loc='center right')):
     """Computing edges, f_b, and P(c), P(b|c) panels for one experiment."""
     ax = axs[0]; loglog(ax, ylabel='computing edges per resident')
     r = series(exp, 'ce')
@@ -473,7 +474,7 @@ def mech_panels(axs, exp, big, color, ce_ref=None):
             txt.append(f'{lab}: $N^{{{f[1]:+.2f}}}$')
             fitline(ax, r_, MUTED, label_fmt=None, lw=0.9, ls='--')
     note(ax, '   '.join(txt), loc=(0.02, 0.02), ha='left')
-    ax.legend(loc='center right', fontsize=9)
+    ax.legend(fontsize=9, **dloc)
 
 
 def fig4(outdir, big):
@@ -487,7 +488,8 @@ def fig4(outdir, big):
     sub2.text(5, 0.6, '$I_1 \\to 1$ rewired to $2 \\to 1$: 5', ha='center', fontsize=10, color=BLUE)
     note(ax, 'computing edge: on a path from the inputs to $O$', loc=(0.5, 0.0), ha='center')
 
-    mech_panels([axs[0, 1], axs[1, 0], axs[1, 1]], 'par_1e4', big, BLUE)
+    mech_panels([axs[0, 1], axs[1, 0], axs[1, 1]], 'par_1e4', big, BLUE,
+                dloc=dict(loc='lower left', bbox_to_anchor=(0, 0.07)))
     title(axs[0, 1], 'B   computing edges stay ≈ constant')
     title(axs[1, 0], 'C   $f_b$ is roughly independent of $N$')
     title(axs[1, 1], 'D   so $P(b) \\propto P(c) P(b|c) \\sim 1/N$')

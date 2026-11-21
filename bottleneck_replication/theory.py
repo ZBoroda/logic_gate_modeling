@@ -20,10 +20,17 @@ def _ab(Np):
     return pf[4 + 2], pf[4 + 1], pf[4 + 3], pf[4 + 4]   # pi(1/2), pi(1/4), pi(3/4), pi(1)
 
 
-def exact_M_parallel(N, Np=1e4):
+def exact_M_parallel_terms(N, Np=1e4):
+    """The two terms of Eq. (3): mean proposals spent below fitness 1/2 (first
+    step, including the rare detour through 1/4) and at fitness 1/2 (second step)."""
     a, b, _, _ = _ab(Np)
-    return ((2 * N + 1) * N ** 2 / (2 * (N - 1) * ((N - 1) * a + b))
-            + ((2 * N + 1) * N - 2) / ((N - 1) * a))
+    return ((2 * N + 1) * N ** 2 / (2 * (N - 1) * ((N - 1) * a + b)),
+            ((2 * N + 1) * N - 2) / ((N - 1) * a))
+
+
+def exact_M_parallel(N, Np=1e4):
+    t1, t2 = exact_M_parallel_terms(N, Np)
+    return t1 + t2
 
 
 def inv_p0_formula(N, L, Np=1e4):

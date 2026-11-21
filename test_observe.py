@@ -78,6 +78,8 @@ def test_identical_to_run_batch():
         fix = st[:, 1:4].sum(1); lost = st[:, 4:7].sum(1)
         assert (fix + lost == M).all()
         assert (st[:, C['n_res']] == fix + 1).all()
+        st3, _ = run_batch_obs(g, 0b1000, pfix_table(Np), 10**7, 7, 40, -3.0, 5)
+        assert (st3[:, 0] == M).all() and (st3[:, C['fb_n']] >= 0).all()
     print('PASS identical to run_batch; stats consistent')
 
 

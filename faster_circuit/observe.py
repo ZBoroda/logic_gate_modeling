@@ -314,10 +314,20 @@ def run_batch_obs(genome0, target, pfix, m_max, seed, n_trials, p_res, k_edges):
     stats = np.zeros((n_trials, 12), dtype=np.float64)
     rng = np.zeros(1, dtype=np.uint64)
     for j in range(n_trials):
+        p = p_res
+        if p_res < 0:
+            # adaptive: a first pass (f_b off) counts the residents, then the run
+            # is replayed bit for bit with p = R / residents, R = -p_res
+            np.random.seed(seed + j)
+            g = genome0.copy()
+            tmp = np.zeros(12, dtype=np.float64)
+            ctmp = np.zeros(5, dtype=np.int64)
+            _run_one_obs(g, target, pfix, m_max, ctmp, tmp, 0.0, k_edges, rng)
+            p = min(1.0, -p_res / tmp[7])
         np.random.seed(seed + j)
         rng[0] = np.uint64(seed + j) * np.uint64(0x2545F4914F6CDD1D) + np.uint64(12345)
         g = genome0.copy()
-        _run_one_obs(g, target, pfix, m_max, counts[j], stats[j], p_res, k_edges, rng)
+        _run_one_obs(g, target, pfix, m_max, counts[j], stats[j], p, k_edges, rng)
     return stats, counts
 
 
@@ -328,7 +338,9 @@ def run_observed(f, Np, genome, n_trials=1, seed=0, m_max=10**9, p_res=1.0,
     """
     Instrumented runs. Returns (stats, counts); stats columns are STAT_COLS.
     f is a goals.py function or a 4-bit truth table (int). random_walk=True
-    accepts every mutation (Fig. S1). p_res = 0 switches f_b off.
+    accepts every mutation (Fig. S1). p_res = 0 switches f_b off; p_res = -R
+    measures each resident with probability min(1, R / residents of that run)
+    (two passes: the run is replayed with the same seed).
     """
     tgt = f if isinstance(f, (int, np.integer)) else target_bits(f)
     pf = np.ones(9) if random_walk else pfix_table(Np)

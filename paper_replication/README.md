@@ -55,3 +55,21 @@ mutation then costs O(module) to evaluate, so the larger sizes would take days.
 
 As in the paper, the plots show means over runs, with error bars at the 5th and
 95th percentiles of the per-run values.
+
+## Main results (figs_1e6)
+
+- **Fig 3**, parallel start, N_P = 10⁴: M ≈ 8.7 N^0.99, and the fit over
+  N ≥ 10⁴ gives N^1.01. The near-linear scaling holds all the way to 10⁶.
+- **Fig 4**: P(c) ~ N^−1.01. P(b|c) creeps from 0.29 to 0.38 (about N^+0.03).
+  So Eq. 2 explains M ∝ N.
+- **Fig 5**, chain start: computing edges ≈ 2N and P(c) ≈ 1. M is about flat
+  (≈ 38 N^0.04, median about 22 at every N), and f_b ≈ 0.21.
+- **Fig S1**, random walk (to 10⁵): M ~ N^0.93 overall and N^0.99 for N ≥ 10⁴.
+  The computing module grows as N^0.83.
+- **Fig S3**, other targets, N_P = 10 (to 10⁴): the exponents are about 1.0.
+- **Fig S4**, parallel start, N_P = 10 (to 10⁵): M ~ N^0.97, and N^1.02 for
+  N ≥ 10⁴. P(c) follows the paper's slope up to about 10³. Above about 10⁴ it
+  levels off near 6×10⁻³, because drift grows the module. Eq. 2 alone no longer
+  explains the scaling there.
+- **Fig S5**, chain start, N_P = 10 (to 10⁶): M ~ N^0.23, with a broad spread
+  across runs. P(c) ≈ 1, and P(b|c) ≈ 0.17.

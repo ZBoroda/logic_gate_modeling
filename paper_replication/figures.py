@@ -670,7 +670,7 @@ def small_pop(outdir, big, exp, exp_big, color, name, letter_titles, paper_notes
 def figS4(outdir, big):
     small_pop(outdir, big, 'par_10', 'par_1e4', ORANGE, 'figS4_small_population.png',
               ['A   $N_P = 10$: total mutations', 'B   fixating mutations',
-               'C   $P(c)$ still falls like $1/N$', 'D   $P(b|c)$ nearly flat'],
+               'C   $P(c)$ falls, then levels off', 'D   $P(b|c)$ nearly flat'],
               ['paper: exponent 0.90 (0.87 / 0.92)', 'paper: $-0.85$ ($-0.81$ / $-0.87$)',
                'paper: $-0.020$ ($-0.049$ / $-0.012$)'])
 

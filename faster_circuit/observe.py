@@ -2,11 +2,20 @@
 Instrumented faster_circuit runs: the observables of the paper's figures.
 
 Per run this records, besides M:
+  * n_comp, the number of proposed mutations that hit a computing edge of the
+    resident. With the beneficial proposals (fix_ben + lost_ben; only computing
+    edges can change the output) these give the per-mutation probabilities that
+    enter Eq. 2, weighted by the mutations actually proposed (time spent in each
+    resident, and the cycle-redraw bias of the mutation process):
+        P(c)   = n_comp / M
+        P(b|c) = (fix_ben + lost_ben) / n_comp
+    so M * P(c) * P(b|c) = number of beneficial proposals, exactly.
   * fixating / non-fixating mutations, split by type (beneficial, deleterious,
     neutral)                                               Fig. 3C-D, S4B, S5B
   * computing edges of every resident network (initial + each fixed mutant),
     averaged over residents                                Fig. 4B, 5B; P(c)
-  * f_b, the fraction of beneficial alternatives per computing edge, averaged
+  * structural f_b (a landscape property, not a per-mutation probability): the
+    fraction of beneficial alternatives per computing edge, averaged
     over every (resident, computing edge) pair of the run, the final fitness-1
     resident excluded                                Fig. 4C, 5C, S4D, S5D; P(b|c)
     stats: fb_sum = sum over measured residents of n_c * mean f_b, fb_n = sum
@@ -48,7 +57,8 @@ from faster_circuit.core import (INPUT_TT, POPCOUNT4, node_value, is_ancestor,
 
 # columns of the per-run stats array
 STAT_COLS = ['M', 'fix_ben', 'fix_del', 'fix_neu', 'lost_ben', 'lost_del', 'lost_neu',
-             'n_res', 'ce_sum', 'fb_sum', 'fb_n', 'capped']
+             'n_res', 'ce_sum', 'fb_sum', 'fb_n', 'capped', 'n_comp']
+NCOL = len(STAT_COLS)
 S = {k: i for i, k in enumerate(STAT_COLS)}
 
 
@@ -283,6 +293,8 @@ def _run_one_obs(genome, target, pfix, m_max, counts, st, p_res, k_edges, rng):
             m2 = m
         counts[m] += 1
         M += 1
+        if touches_module:                 # proposal on a computing edge of the resident
+            st[12] += 1
         kind = 0 if m2 > m else (1 if m2 < m else 2)          # ben, del, neu
         if np.random.random() < pfix[m2 - m + 4]:
             st[1 + kind] += 1
@@ -319,7 +331,7 @@ def matches_(genome, target, memo, stamp, epoch, stack):
 def run_batch_obs(genome0, target, pfix, m_max, seed, n_trials, p_res, k_edges):
     """Like core.run_batch, plus stats[n_trials, len(STAT_COLS)]."""
     counts = np.zeros((n_trials, 5), dtype=np.int64)
-    stats = np.zeros((n_trials, 12), dtype=np.float64)
+    stats = np.zeros((n_trials, 13), dtype=np.float64)
     rng = np.zeros(1, dtype=np.uint64)
     for j in range(n_trials):
         p = p_res
@@ -328,7 +340,7 @@ def run_batch_obs(genome0, target, pfix, m_max, seed, n_trials, p_res, k_edges):
             # is replayed bit for bit with p = R / residents, R = -p_res
             np.random.seed(seed + j)
             g = genome0.copy()
-            tmp = np.zeros(12, dtype=np.float64)
+            tmp = np.zeros(13, dtype=np.float64)
             ctmp = np.zeros(5, dtype=np.int64)
             _run_one_obs(g, target, pfix, m_max, ctmp, tmp, 0.0, k_edges, rng)
             p = min(1.0, -p_res / tmp[7])

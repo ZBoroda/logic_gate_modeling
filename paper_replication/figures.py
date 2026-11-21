@@ -55,6 +55,12 @@ def load(exp, N):
                    fix_ben=st[:, 1], lost_ben=st[:, 4], lost_del=st[:, 5], lost_neu=st[:, 6],
                    ce=st[:, 8] / st[:, 7], fb=st[:, 9] / st[:, 10], capped=st[:, 11],
                    counts=d['counts'])
+    # mutation-weighted counts (files from before the n_comp column: nan)
+    out['n_comp'] = st[:, 12] if st.shape[1] > 12 else np.full(len(st), np.nan)
+    out['n_ben'] = st[:, 1] + st[:, 4]
+    with np.errstate(invalid='ignore', divide='ignore'):
+        out['pc_mut'] = out['n_comp'] / out['M']
+        out['pbc_mut'] = out['n_ben'] / out['n_comp']
     if str(d.get('fb_def', '')) != FB_DEF:            # f_b from an older convention:
         out['fb'] = np.full(len(st), np.nan)        # never plot it
     out['pc'] = out['ce'] / (2 * N + 1)

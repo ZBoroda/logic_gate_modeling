@@ -5,6 +5,8 @@ Tests for faster_circuit.observe:
   3. exact p_b_given_c and computing_edges match brute-force enumeration
      (every computing edge, every alternative source, explicit cycle test)
   4. sampled-edge f_b is unbiased
+  6. mutation-weighted P(c) = n_comp / M and P(b|c) = beneficial / n_comp agree
+     with the independent simulation
   5. per-run f_b (edge-pooled over residents, final resident excluded) agrees
      with an independent pure-Python simulation + brute-force f_b
 """
@@ -80,6 +82,8 @@ def test_identical_to_run_batch():
         fix = st[:, 1:4].sum(1); lost = st[:, 4:7].sum(1)
         assert (fix + lost == M).all()
         assert (st[:, C['n_res']] == fix + 1).all()
+        ben = st[:, C['fix_ben']] + st[:, C['lost_ben']]
+        assert (st[:, C['n_comp']] <= M).all() and (ben <= st[:, C['n_comp']]).all()
         st3, _ = run_batch_obs(g, 0b1000, pfix_table(Np), 10**7, 7, 40, -3.0, 5)
         assert (st3[:, 0] == M).all() and (st3[:, C['fb_n']] >= 0).all()
     print('PASS identical to run_batch; stats consistent')
@@ -151,9 +155,67 @@ def test_fb_convention_vs_reference():
               f'(± {se:.4f})')
 
 
+def _ref_counts(g, pfix, rng):
+    """Independent reference: (M, proposals on computing edges, beneficial proposals)."""
+    N = (len(g) - 1) // 2
+    m = round(4 * fitness(g, and_funct))
+    M = comp = ben = 0
+    while m < 4:
+        e = rng.randrange(len(g))
+        alts = (range(2, N + 2) if e == 2 * N else
+                [u for u in range(N + 2) if u != e // 2 + 2])
+        new = rng.choice([u for u in alts if u != g[e]])
+        h = list(g); h[e] = new
+        if FastCircuit(h).has_cycle():
+            continue
+        ce = e == 2 * N or (e // 2 + 2) in _module_of(g)
+        m2 = round(4 * fitness(h, and_funct))
+        M += 1; comp += ce; ben += m2 > m
+        if rng.random() < pfix[m2 - m + 4]:
+            g, m = h, m2
+    return M, comp, ben
+
+
+def _module_of(g):
+    mod, stack = set(), [g[-1]]
+    while stack:
+        v = stack.pop()
+        if v < 2 or v in mod:
+            continue
+        mod.add(v)
+        stack += [g[2 * (v - 2)], g[2 * (v - 2) + 1]]
+    return mod
+
+
+def _boot_se(a, b, rng, k=300):
+    n = len(a)
+    r = [a[i].sum() / b[i].sum() for i in (rng.integers(0, n, n) for _ in range(k))]
+    return float(np.std(r))
+
+
+def test_mutation_weighted_vs_reference():
+    """P(c), P(b|c) pooled over runs (ratio of sums); chain N=11 separates them from
+    structural f_b (0.07 vs 0.43)."""
+    brng = np.random.default_rng(0)
+    for gen, Np, n in [(parallel(20), 1e4, 400), (chain(11), 1e4, 1500), (parallel(12), 10.0, 300)]:
+        pf = pfix_table(Np)
+        st, _ = run_batch_obs(np.array(gen, dtype=np.int64), 0b1000, pf, 10**7, 13, n, 0.0, 1)
+        eM, eC = st[:, C['M']], st[:, C['n_comp']]
+        eB = st[:, C['fix_ben']] + st[:, C['lost_ben']]
+        rng = random.Random(9)
+        R = np.array([_ref_counts(list(gen), pf, rng) for _ in range(n)], dtype=float)
+        for lab, (a, b), (c, d) in [('P(c)', (eC, eM), (R[:, 1], R[:, 0])),
+                                    ('P(b|c)', (eB, eC), (R[:, 2], R[:, 1]))]:
+            x, y = a.sum() / b.sum(), c.sum() / d.sum()
+            se = np.hypot(_boot_se(a, b, brng), _boot_se(c, d, brng))
+            assert abs(x - y) < 4 * se, (lab, x, y, se)
+            print(f'PASS {lab} mutation-weighted: engine {x:.4f} vs reference {y:.4f} (± {se:.4f})')
+
+
 if __name__ == '__main__':
     warmup()
     test_identical_to_run_batch()
     test_p_b_given_c()
     test_sampled_unbiased()
     test_fb_convention_vs_reference()
+    test_mutation_weighted_vs_reference()

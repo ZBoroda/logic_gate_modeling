@@ -5,6 +5,8 @@ Tests for faster_circuit.observe:
   3. exact p_b_given_c and computing_edges match brute-force enumeration
      (every computing edge, every alternative source, explicit cycle test)
   4. sampled-edge f_b is unbiased
+  5. per-run f_b (edge-pooled over residents, final resident excluded) agrees
+     with an independent pure-Python simulation + brute-force f_b
 """
 import random
 
@@ -108,8 +110,50 @@ def test_sampled_unbiased():
     print(f'PASS sampled f_b unbiased: {est:.4f} vs exact {exact:.4f}')
 
 
+def _ref_run_fb(g, pfix, rng):
+    """Independent reference: SSWM run (Methods 6.2 mutations) and the edge-pooled
+    f_b over its non-final residents, every alternative tried explicitly."""
+    N = (len(g) - 1) // 2
+    m = round(4 * fitness(g, and_funct))
+    res = [list(g)]
+    while m < 4:
+        e = rng.randrange(len(g))
+        alts = (range(2, N + 2) if e == 2 * N else
+                [u for u in range(N + 2) if u != e // 2 + 2])
+        new = rng.choice([u for u in alts if u != g[e]])
+        h = list(g); h[e] = new
+        if FastCircuit(h).has_cycle():
+            continue
+        m2 = round(4 * fitness(h, and_funct))
+        if rng.random() < pfix[m2 - m + 4]:
+            g, m = h, m2
+            if m < 4:
+                res.append(list(g))
+    ben_sum = n_edges = 0.0
+    for r in res:
+        ce, fb = brute(r, and_funct)
+        ben_sum += fb * ce; n_edges += ce
+    return ben_sum / n_edges
+
+
+def test_fb_convention_vs_reference():
+    """Separates the conventions: parallel N=20, N_P=10 (pooled 0.30 vs per-resident
+    0.35) and chain N=5, N_P=1e4 (0.50 vs 0.33 with the final resident)."""
+    for gen, Np, n in [(parallel(20), 10.0, 600), (chain(5), 1e4, 1500)]:
+        pf = pfix_table(Np)
+        st, _ = run_batch_obs(np.array(gen, dtype=np.int64), 0b1000, pf, 10**7, 11, n, 1.0, 10**9)
+        eng = st[:, C['fb_sum']] / st[:, C['fb_n']]
+        rng = random.Random(5)
+        ref = np.array([_ref_run_fb(list(gen), pf, rng) for _ in range(n)])
+        se = np.hypot(eng.std() / np.sqrt(n), ref.std() / np.sqrt(n))
+        assert abs(eng.mean() - ref.mean()) < 4 * se, (eng.mean(), ref.mean(), se)
+        print(f'PASS f_b convention: engine {eng.mean():.4f} vs reference {ref.mean():.4f} '
+              f'(± {se:.4f})')
+
+
 if __name__ == '__main__':
     warmup()
     test_identical_to_run_batch()
     test_p_b_given_c()
     test_sampled_unbiased()
+    test_fb_convention_vs_reference()

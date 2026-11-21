@@ -15,7 +15,8 @@ faster_circuit.observe, extended to large N.
 Results: paper_replication/results/<exp>_N<N>.npz with stats (columns
 faster_circuit.observe.STAT_COLS), counts, seconds, p_res, k_edges.
 Trial j of a config is seeded with seed_base + j, so chunking does not change
-results. Existing files are skipped; configs run small N first.
+results. Existing files are skipped; the most expensive configs run first.
+Each file records fb_def, the f_b convention it was measured with.
 
 Usage:  python -m paper_replication.run [n_workers] [exp ...]
 """
@@ -52,6 +53,9 @@ EXPS = {
     'rw':        ('parallel', AND, None, GRID[:14], 500, False),
 }
 CHUNK = 25
+FB_DEF = 'edge_pooled_no_final'   # faster_circuit.observe f_b convention (see its docstring)
+# rough relative cost per run, for scheduling the most expensive chunks first
+COST = {'par_10': 40.0, 'rw': 40.0, 'andnot_10': 20.0, 'or_10': 10.0, 'true_10': 5.0}
 
 
 def path(exp, N):
@@ -90,7 +94,9 @@ def main():
             if os.path.exists(path(exp, N)):
                 continue
             tasks += [(exp, N, s, min(CHUNK, trials - s)) for s in range(0, trials, CHUNK)]
-    tasks.sort(key=lambda t: t[1])
+    # most expensive first: heavy-tailed run times, so the big chunks must not
+    # start last and leave one core working alone for hours
+    tasks.sort(key=lambda t: -t[1] * COST.get(t[0], 1.0))
     print(f'{len(tasks)} chunks', flush=True)
     parts = {}
     _init()
@@ -104,7 +110,7 @@ def main():
                 counts = np.concatenate([p[2] for p in ps])
                 cpu = sum(p[3] for p in ps)
                 np.savez(path(exp, N), stats=st, counts=counts, seconds=cpu,
-                         r_fb=R_FB, k_edges=K_EDGES)
+                         r_fb=R_FB, k_edges=K_EDGES, fb_def=FB_DEF)
                 print(f'{time.strftime("%H:%M:%S")} {exp:10s} N={N:8d} <M>={st[:, 0].mean():12.1f} '
                       f'ce={st[:, 8].sum() / st[:, 7].sum():9.1f} '
                       f'fb={np.nanmean(st[:, 9] / st[:, 10]) if st[:, 10].any() else float("nan"):.3f} '

@@ -7,8 +7,14 @@ Per run this records, besides M:
   * computing edges of every resident network (initial + each fixed mutant),
     averaged over residents                                Fig. 4B, 5B; P(c)
   * f_b, the fraction of beneficial alternatives per computing edge, averaged
-    over the computing edges of a resident and then over residents   Fig. 4C,
-    5C, S4D, S5D; P(b|c)
+    over every (resident, computing edge) pair of the run, the final fitness-1
+    resident excluded                                Fig. 4C, 5C, S4D, S5D; P(b|c)
+    stats: fb_sum = sum over measured residents of n_c * mean f_b, fb_n = sum
+    of their n_c, so fb_sum / fb_n is the edge-pooled mean.
+    This is the convention that reproduces the paper's values (0.37 parallel,
+    0.50 -> 0.32 chain, N_P = 10^4; also S4D / S5D). A per-resident mean that
+    includes the final resident, whose f_b is 0, gives values about 30% lower;
+    the earlier version of this module recorded that.
 
 Definitions follow the paper's Methods 6.3-6.6:
   computing edge  an edge on a path from the inputs to the output O. With a
@@ -27,8 +33,8 @@ w)), so only the histogram of truth tables over allowed sources is needed:
 |module|), per resident O(N) for the histogram and the forward adjacency.
 
 Cost control (large N): a resident's f_b is measured with probability p_res
-(uniform thinning, so the per-run mean over measured residents is an unbiased
-estimate of the mean over all residents), and when it has more than k_edges
+(uniform thinning, so the edge-pooled mean over measured residents estimates
+the one over all residents), and when it has more than k_edges
 computing edges, k_edges of them are sampled uniformly with replacement. With
 p_res = 1 and k_edges >= n_c the measurement is exact. Thinning and edge
 sampling use a private splitmix64 stream, so the simulation itself (M, counts,
@@ -235,12 +241,12 @@ def _run_one_obs(genome, target, pfix, m_max, counts, st, p_res, k_edges, rng):
     # resident 0
     st[7] += 1
     st[8] += 2 * n_mod + 1
-    if do_fb and _sm_uniform(rng) < p_res:
+    if do_fb and m < 4 and _sm_uniform(rng) < p_res:
         fb, tepoch, depoch, epoch2 = _resident_fb(genome, target, m, mod_list, n_mod, k_edges, rng,
                                                   tt, tstamp, tepoch, ptr, adj, fill, dstamp, depoch,
                                                   memo2, stamp2, epoch2, stack, queue)
-        st[9] += fb
-        st[10] += 1
+        st[9] += fb * (2 * n_mod + 1)          # edge-pooled: weight = computing edges
+        st[10] += 2 * n_mod + 1
     M = 0
     while m < 4 and M < m_max:
         e = np.random.randint(0, L)
@@ -285,13 +291,15 @@ def _run_one_obs(genome, target, pfix, m_max, counts, st, p_res, k_edges, rng):
                 n_mod = mark_module(genome, in_mod, mod_list, n_mod, stack)
             st[7] += 1
             st[8] += 2 * n_mod + 1
-            if do_fb and _sm_uniform(rng) < p_res:
+            # the final (fitness-1) resident has no beneficial mutations and is not
+            # counted, as in the paper; residents with m == 4 end the run
+            if do_fb and m < 4 and _sm_uniform(rng) < p_res:
                 fb, tepoch, depoch, epoch2 = _resident_fb(
                     genome, target, m, mod_list, n_mod, k_edges, rng,
                     tt, tstamp, tepoch, ptr, adj, fill, dstamp, depoch,
                     memo2, stamp2, epoch2, stack, queue)
-                st[9] += fb
-                st[10] += 1
+                st[9] += fb * (2 * n_mod + 1)
+                st[10] += 2 * n_mod + 1
         else:
             st[4 + kind] += 1
             genome[e] = old

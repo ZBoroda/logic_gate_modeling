@@ -23,7 +23,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 
-from paper_replication.run import EXPS, path, AND, ANDNOT, OR, TRUE
+from paper_replication.run import EXPS, path, AND, ANDNOT, OR, TRUE, FB_DEF
 from bottleneck_replication.theory import exact_M_parallel
 
 HERE = os.path.dirname(__file__)
@@ -55,6 +55,8 @@ def load(exp, N):
                    fix_ben=st[:, 1], lost_ben=st[:, 4], lost_del=st[:, 5], lost_neu=st[:, 6],
                    ce=st[:, 8] / st[:, 7], fb=st[:, 9] / st[:, 10], capped=st[:, 11],
                    counts=d['counts'])
+    if str(d.get('fb_def', '')) != FB_DEF:            # f_b from an older convention:
+        out['fb'] = np.full(len(st), np.nan)        # never plot it
     out['pc'] = out['ce'] / (2 * N + 1)
     out['frac_ben'] = out['lost_ben'] / out['lost']
     out['frac_del'] = out['lost_del'] / out['lost']

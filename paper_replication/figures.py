@@ -15,6 +15,7 @@ import os
 import sys
 import math
 import itertools
+import zlib
 
 import numpy as np
 import matplotlib
@@ -29,6 +30,8 @@ HERE = os.path.dirname(__file__)
 INK, MUTED, GRID_C = '#1a1a1a', '#6b6b6b', '#e6e6e6'
 BLUE, ORANGE, GREEN, PINK, SKY, VERM, YEL, PURP = ('#0072B2', '#E69F00', '#009E73', '#CC79A7',
                                                   '#56B4E9', '#D55E00', '#F0E442', '#2E2A7A')
+# fitness categories, viridis as in the paper's Figs 2, 4D, 5D
+FITC = {0.0: '#440154', 0.25: '#3b528b', 0.5: '#21918c', 0.75: '#5ec962', 1.0: '#fde725'}
 TAU = 1000.0                     # 1 / mutation rate per edge per network (Methods 6.1)
 
 plt.rcParams.update({'font.size': 10, 'axes.spines.top': False, 'axes.spines.right': False,
@@ -57,7 +60,7 @@ def load(exp, N):
     out['frac_del'] = out['lost_del'] / out['lost']
     out['frac_neu'] = out['lost_neu'] / out['lost']
     Np = EXPS[exp][2] or 1.0
-    rng = np.random.default_rng(N)
+    rng = np.random.default_rng([zlib.crc32(exp.encode()), N])
     out['T'] = rng.gamma(np.maximum(out['M'], 1e-9), TAU / ((2 * N + 1) * Np))
     return out
 
@@ -82,10 +85,10 @@ def series(exp, key, nmax=None, stat='mean'):
     return np.array(rows) if rows else np.zeros((0, 6))
 
 
-def fit(r, lo=0, hi=np.inf):
+def fit(r, lo=0, hi=np.inf, nmin=3):
     """y = A N^b on rows with lo <= N <= hi. Returns (A, b, b_se)."""
     m = (r[:, 0] >= lo) & (r[:, 0] <= hi) & (r[:, 1] > 0)
-    if m.sum() < 3:
+    if m.sum() < nmin:
         return None
     x, y = np.log(r[m, 0]), np.log(r[m, 1])
     b, a = np.polyfit(x, y, 1)
@@ -102,6 +105,37 @@ def halves(r):
     k = n // 2
     lo, hi = fit(r[:k]), fit(r[k:])
     return lo[1], hi[1]
+
+
+def thirds(r, hi):
+    """Paper's sensitivity check: fit 3 non-overlapping contiguous subsets of the
+    points with N <= hi. Returns (A mean, A sd, b mean, b sd)."""
+    rr = r[r[:, 0] <= hi * 1.001]
+    fs = [fit(c, nmin=2) for c in np.array_split(rr, 3)]
+    fs = [f for f in fs if f]
+    if len(fs) < 3:
+        return None
+    A = np.array([f[0] for f in fs]); b = np.array([f[1] for f in fs])
+    return A.mean(), A.std(ddof=1), b.mean(), b.std(ddof=1)
+
+
+def b_on(r, lo, hi):
+    f = fit(r, lo, hi * 1.001, nmin=2)
+    return f[1] if f else float('nan')
+
+
+def num(x, fmt='{:.2f}'):
+    """Number with a typographic minus sign."""
+    return fmt.format(x).replace('-', '−')
+
+
+def esc(t):
+    return t.replace('{', '{{').replace('}', '}}')
+
+
+def tex_n(n):
+    k = math.log10(n)
+    return f'10^{{{int(round(k))}}}' if abs(k - round(k)) < 1e-9 else f'{n:g}'
 
 
 # ── drawing helpers ───────────────────────────────────────────────────────────
@@ -154,6 +188,19 @@ def fit_lines(ax, r, color, big):
     return f
 
 
+def paper_fits(ax, r, color, big, paper_hi, lw=1.4):
+    """Solid fit over the paper's N range (comparable with its numbers), dashed fit
+    over the extension: N >= paper_hi in the 1e4 set, N >= 10^4 in the 1e6 set."""
+    f = fitline(ax, r, color, hi=paper_hi * 1.001, lw=lw,
+                label_fmt=f'$N \\leq {esc(tex_n(paper_hi))}$ (paper range): ' + '$y={A:.3g}\\,N^{{{b:.2f}}}$')
+    lo = FIT_HI_LO if big and (r[:, 0] >= FIT_HI_LO).sum() >= 3 else paper_hi
+    g = None
+    if (r[:, 0] >= lo).sum() >= 3:
+        g = fitline(ax, r, color, lo=lo, ls='--', lw=lw,
+                    label_fmt=f'$N \\geq {esc(tex_n(lo))}$: ' + '$y={A:.3g}\\,N^{{{b:.2f}}}$')
+    return f, g
+
+
 def note(ax, s, loc=(0.98, 0.04), ha='right', va='bottom', fs=9):
     ax.text(*loc, s, transform=ax.transAxes, ha=ha, va=va, fontsize=fs, color=MUTED)
 
@@ -174,7 +221,7 @@ def _limits(ax):
     if not xs:
         return
     x = np.concatenate(xs); y = np.concatenate(ys)
-    if ax.get_xscale() == 'log':
+    if ax.get_xscale() == 'log' and not getattr(ax, 'keep_xlim', False):
         x = x[np.isfinite(x) & (x > 0)]
         if len(x):
             ax.set_xlim(x.min() / 1.6, x.max() * 1.6)
@@ -267,72 +314,116 @@ def tt_str(v):
     return [str((v >> i) & 1) for i in range(4)]
 
 
+I1_TT, I2_TT = 0b1100, 0b1010
+
+
+def nand(a, b):
+    return (~(a & b)) & 0xF
+
+
+def fit_and(v):
+    return sum(o == t for o, t in zip(tt_str(v), tt_str(AND))) / 4
+
+
+def box(ax, x0, y0, x1, y1, text, fc='#f4f7fb', fs=9.6):
+    ax.add_patch(FancyBboxPatch((x0, y0), x1 - x0, y1 - y0, boxstyle='round,pad=0.02,rounding_size=0.15',
+                                fc=fc, ec='#8aa1b8', lw=1.1, zorder=2))
+    ax.text((x0 + x1) / 2, (y0 + y1) / 2, text, ha='center', va='center', fontsize=fs, zorder=3)
+
+
+def poly_arrow(ax, pts, color=INK, label=None, lpos=None, lw=1.1):
+    """Orthogonal connector through pts, arrowhead on the last segment."""
+    xs, ys = zip(*pts)
+    ax.plot(xs[:-1], ys[:-1], color=color, lw=lw, solid_joinstyle='round', zorder=1)
+    ax.annotate('', xy=pts[-1], xytext=pts[-2],
+                arrowprops=dict(arrowstyle='-|>', color=color, lw=lw, shrinkA=0, shrinkB=0))
+    if label:
+        ax.text(*lpos, label, fontsize=9, ha='center', va='bottom', color=color)
+
+
+def two_gate_net(ax, ox, edges, fitness=None):
+    """Fig. 1 two-gate network at x offset ox. edges: (src, dst, color, ls, dx) with
+    nodes 'I1', 'I2', '1', '2', 'O'; dx shifts a parallel copy of an edge."""
+    P = {'I1': (ox + 1.4, 8.8), 'I2': (ox + 4.4, 8.8), '2': (ox + 3.9, 6.5), '1': (ox + 1.9, 4.2),
+         'O': (ox + 1.9, 1.9)}
+    for k, lab in [('I1', '$I_1$'), ('I2', '$I_2$'), ('O', '$O$')]:
+        node(ax, P[k], lab, '#e3e3e3')
+    node(ax, P['1'], '1'); node(ax, P['2'], '2')
+    for a, b, c, ls, dx in edges:
+        arrow(ax, (P[a][0] + dx, P[a][1]), (P[b][0] + dx, P[b][1]), color=c, ls=ls,
+              lw=2.0 if c != INK else 1.3)
+    if fitness is not None:
+        ax.text(P['O'][0], 0.8, f'fitness = {fitness:g}', ha='center', fontsize=10)
+    return P
+
+
 def fig1(outdir):
-    fig = plt.figure(figsize=(14, 5.2))
-    gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 1.15, 1.0])
-    # A: example network NAND gates g1 = NAND(I1, I2), g2 = NAND(I1, g1), O <- g2
-    ax = fig.add_subplot(gs[0]); blank(ax)
-    title(ax, 'A   a network and its function')
-    I1, I2, g1, g2, O = (2.0, 9.0), (4.6, 9.0), (4.0, 6.8), (2.4, 4.6), (2.4, 2.4)
-    for p, l, f in [(I1, '$I_1$', '#e3e3e3'), (I2, '$I_2$', '#e3e3e3'), (g1, '1', 'white'),
-                    (g2, '2', 'white'), (O, '$O$', '#e3e3e3')]:
-        node(ax, p, l, f)
-    arrow(ax, I1, g1); arrow(ax, I2, g1); arrow(ax, I1, g2); arrow(ax, g1, g2); arrow(ax, g2, O)
-    v1 = (~(0b1100 & 0b1010)) & 0xF
-    v2 = (~(0b1100 & v1)) & 0xF
+    fig = plt.figure(figsize=(14, 11))
+    gs = fig.add_gridspec(2, 2, height_ratios=[1, 0.95], width_ratios=[1, 1.05])
+
+    # A: gate 2 = NAND(I1, I2), gate 1 = NAND(I1, gate 2), O <- gate 1 (paper Fig. 1A)
+    ax = fig.add_subplot(gs[0, 0]); blank(ax, (0, 14), (0, 10))
+    title(ax, 'A   network (genotype) and its function (phenotype)')
+    two_gate_net(ax, 0, [('I1', '2', INK, '-', 0), ('I2', '2', INK, '-', 0),
+                         ('I1', '1', INK, '-', 0), ('2', '1', INK, '-', 0), ('1', 'O', INK, '-', 0)])
+    v2 = nand(I1_TT, I2_TT); v1 = nand(I1_TT, v2)
     rows = [('0', '0'), ('0', '1'), ('1', '0'), ('1', '1')]
-    out, tgt = tt_str(v2), tt_str(AND)
-    tx, ty = 6.0, 7.2
-    for j, h in enumerate(['$I_1$', '$I_2$', '$O$', 'AND']):
-        ax.text(tx + 0.9 * j, ty + 0.9, h, fontsize=10, fontweight='bold', ha='center')
+    out, tgt = tt_str(v1), tt_str(AND)
+    tx, ty = 7.2, 7.6
+    for j, h in enumerate(['$I_1$', '$I_2$', 'output', 'AND']):
+        ax.text(tx + 1.25 * j, ty + 0.9, h, fontsize=10, fontweight='bold', ha='center')
     for i, (a, b) in enumerate(rows):
         ok = out[i] == tgt[i]
         for j, v in enumerate([a, b, out[i], tgt[i]]):
-            ax.text(tx + 0.9 * j, ty - 0.75 * i, v, fontsize=10, family='monospace', ha='center')
-        ax.text(tx + 3.55, ty - 0.75 * i, '✓' if ok else '✗', color=GREEN if ok else VERM,
+            ax.text(tx + 1.25 * j, ty - 0.8 * i, v, fontsize=10, family='monospace', ha='center')
+        ax.text(tx + 4.85, ty - 0.8 * i, '✓' if ok else '✗', color=GREEN if ok else VERM,
                 fontsize=11, ha='center')
-    f = sum(o == t for o, t in zip(out, tgt)) / 4
-    ax.text(tx, ty - 3.6, f'fitness for AND = {f:g}', fontsize=10.5)
-    ax.text(0.2, 0.6, 'every gate is NAND; edges point from source to gate', fontsize=9,
-            color=MUTED)
+    ax.text(tx - 0.4, ty - 3.9, f'fitness = {sum(o == t for o, t in zip(out, tgt))}/4 = {fit_and(v1):g}',
+            fontsize=10.5)
+    ax.text(0.2, 0.0, 'every gate is NAND; network size $N$ = number of gates', fontsize=9, color=MUTED)
 
-    # B: a beneficial rewiring found by search from the same network
-    ax = fig.add_subplot(gs[1]); blank(ax)
-    title(ax, 'B   one mutation rewires one edge')
-    node(ax, I1, '$I_1$', '#e3e3e3'); node(ax, I2, '$I_2$', '#e3e3e3')
-    node(ax, g1, '1'); node(ax, g2, '2'); node(ax, O, '$O$', '#e3e3e3')
-    # mutation: input I1 -> 2 is rewired to 1 -> 2: g2 = NAND(g1, g1) = AND
-    arrow(ax, I1, g1); arrow(ax, I2, g1); arrow(ax, g1, g2); arrow(ax, g2, O)
-    arrow(ax, I1, g2, color=VERM, lw=2, ls='--')
-    arrow(ax, g1, g2, color=GREEN, lw=2.2, rad=-0.35)
-    v2b = (~(v1 & v1)) & 0xF
-    fb = sum(o == t for o, t in zip(tt_str(v2b), tgt)) / 4
-    ax.text(5.6, 5.4, 'removed: $I_1 \\to 2$', color=VERM, fontsize=10)
-    ax.text(5.6, 4.7, 'added:    $1 \\to 2$', color=GREEN, fontsize=10)
-    ax.text(5.6, 3.6, f'fitness for AND {f:g} → {fb:g}\n(gate 2 now computes AND)', fontsize=10.5)
-    ax.text(0.2, 0.6, 'new source: any node except the old one, the gate itself and $O$;\n'
-                      'proposals that close a cycle are redrawn', fontsize=9, color=MUTED)
+    # B: the paper's mutation: one of the two I1 -> 1 edges is replaced by 2 -> 1
+    ax = fig.add_subplot(gs[1, :]); blank(ax, (0, 32), (0, 10))
+    title(ax, 'B   a mutation removes one edge and rewires it to a new source')
+    base = [('I1', '2', INK, '-', 0), ('I2', '2', INK, '-', 0), ('1', 'O', INK, '-', 0)]
+    f0 = fit_and(nand(I1_TT, I1_TT)); f1 = fit_and(v1)
+    for ox in (0, 11.5):
+        P = two_gate_net(ax, ox, base + [('I1', '1', INK, '-', -0.14),
+                                         ('I1', '1', VERM if ox else INK, '-', 0.14)],
+                         fitness=None if ox else f0)
+        ax.plot([P['2'][0]] * 2, [P['2'][1] - 0.28, P['2'][1] - 0.75], color=INK, lw=1.3)  # unused output
+    P = two_gate_net(ax, 23, base + [('I1', '1', INK, '-', 0), ('2', '1', GREEN, '-', 0)], fitness=f1)
+    ax.annotate('', xy=(10.4, 5.6), xytext=(6.4, 5.6), arrowprops=dict(arrowstyle='-|>', color=INK, lw=1.3))
+    ax.text(8.4, 6.0, 'select edge to mutate', ha='center', fontsize=10)
+    ax.text(8.4, 4.9, '$I_1 \\to 1$ (red) is removed', ha='center', fontsize=9.5, color=VERM)
+    ax.annotate('', xy=(21.9, 5.6), xytext=(17.9, 5.6), arrowprops=dict(arrowstyle='-|>', color=INK, lw=1.3))
+    ax.text(19.9, 6.0, 'create new edge', ha='center', fontsize=10)
+    ax.text(19.9, 4.9, 'choices for new edge:\n$I_2 \\to 1$,  $2 \\to 1$ (green)', ha='center',
+            va='top', fontsize=9.5)
+    ax.text(0.2, 0.0, 'new source: any node except the old one, the gate itself and $O$ '
+                      '(for the edge into $O$: any other gate); proposals that close a cycle are redrawn',
+            fontsize=9, color=MUTED)
 
-    # C: flowchart
-    ax = fig.add_subplot(gs[2]); blank(ax)
-    title(ax, 'C   evolutionary loop (SSWM, Moran)')
-    steps = [('resident network', 8.6), ('propose one mutation\n(uniform edge, new source)', 6.9),
-             ('fixes with probability\n$\\pi(s) = (1-e^{-s})/(1-e^{-N_P s})$', 5.0),
-             ('fixed: mutant becomes resident\nlost: resident unchanged', 3.1),
-             ('stop when fitness = 1', 1.3)]
-    for s, y in steps:
-        ax.add_patch(FancyBboxPatch((1.0, y - 0.65), 8.0, 1.3, boxstyle='round,pad=0.02,rounding_size=0.2',
-                                    fc='#f4f7fb' if y != 1.3 else '#fdf3e3', ec='#8aa1b8', lw=1.1))
-        ax.text(5.0, y, s, ha='center', va='center', fontsize=9.8)
-    for (_, y0), (_, y1) in zip(steps[:-1], steps[1:]):
-        ax.annotate('', xy=(5.0, y1 + 0.67), xytext=(5.0, y0 - 0.67),
-                    arrowprops=dict(arrowstyle='-|>', color=INK, lw=1.1))
-    # return path: out of the right edge of "fixed/lost", up outside the boxes, into "resident"
-    ax.plot([9.05, 9.55, 9.55], [3.1, 3.1, 8.6], color=MUTED, lw=1.1, solid_joinstyle='round')
-    ax.annotate('', xy=(9.05, 8.6), xytext=(9.55, 8.6),
-                arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=1.1, shrinkA=0, shrinkB=0))
-    ax.text(9.85, 5.85, 'repeat', rotation=90, ha='center', va='center', fontsize=9, color=MUTED)
-    ax.text(5.0, -0.1, '$M$ counts every proposed mutation, fixed or lost', ha='center',
+    # C: flowchart (paper Fig. 1C)
+    ax = fig.add_subplot(gs[0, 1]); blank(ax)
+    title(ax, 'C   evolutionary algorithm (SSWM, Moran fixation)')
+    box(ax, 0.2, 8.4, 4.4, 9.5, 'initialize resident network\nof size $N$')
+    box(ax, 0.2, 6.0, 4.4, 7.3, 'mutate the genotype &\ncompute fitness $f$')
+    box(ax, 0.2, 3.2, 4.4, 4.6, 'does the mutation fixate?\n'
+                                '$\\pi(s) = \\frac{1-e^{-s}}{1-e^{-N_P s}}$', fs=9.2)
+    box(ax, 5.4, 4.8, 9.0, 5.8, 'keep resident\ngenotype as it is')
+    box(ax, 5.4, 2.0, 9.0, 3.0, 'update resident to\nthe mutated genotype')
+    box(ax, 6.2, 0.2, 8.2, 0.95, 'end', fc='#fdf3e3')
+    poly_arrow(ax, [(2.3, 8.4), (2.3, 7.3)])
+    poly_arrow(ax, [(2.3, 6.0), (2.3, 4.6)])
+    poly_arrow(ax, [(4.4, 3.9), (4.9, 3.9), (4.9, 5.3), (5.4, 5.3)], label='no', lpos=(4.65, 4.95))
+    poly_arrow(ax, [(4.4, 3.9), (4.9, 3.9), (4.9, 2.5), (5.4, 2.5)], label='yes', lpos=(4.65, 2.6))
+    poly_arrow(ax, [(9.0, 5.3), (9.35, 5.3), (9.35, 6.45), (4.4, 6.45)])
+    poly_arrow(ax, [(9.0, 2.5), (9.75, 2.5), (9.75, 6.85), (4.4, 6.85)])
+    ax.text(9.9, 4.0, 'if $f \\neq 1$', fontsize=9, rotation=90, ha='left', va='center')
+    poly_arrow(ax, [(7.2, 2.0), (7.2, 0.95)], label='', lpos=None)
+    ax.text(7.35, 1.3, 'if $f = 1$', fontsize=9, ha='left', va='center')
+    ax.text(0.2, -0.45, '$M$ counts every accepted (acyclic) mutation, fixed or lost',
             fontsize=9, color=MUTED)
     save(fig, 'fig1_model.png', outdir)
 
@@ -340,47 +431,36 @@ def fig1(outdir):
 # ── figure 2: genotype graph of size-2 networks ───────────────────────────────
 
 def fig2(outdir):
+    """Genotype graph from the repo's gen_fig2.py (unordered input pairs, as in the
+    paper: 54 genotypes), restyled."""
     import networkx as nx
-    from faster_circuit.core import fitness
-    from faster_circuit import has_cycle_via
+    from matplotlib.patches import Patch
+    import gen_fig2 as g2
+    from fast_circuit.circuit import _target_array
     from goals import and_funct
-    N = 2
-    srcs = {0: [0, 1, 3], 1: [0, 1, 2]}
-    genomes = []
-    for a, b, c, d, o in itertools.product(srcs[0], srcs[0], srcs[1], srcs[1], [2, 3]):
-        g = [a, b, c, d, o]
-        if (2 in (c, d)) and (3 in (a, b)):
-            continue                                        # 2 <-> 3 cycle
-        genomes.append(tuple(g))
-    idx = {g: i for i, g in enumerate(genomes)}
-    G = nx.Graph()
-    G.add_nodes_from(range(len(genomes)))
-    for g in genomes:
-        for e in range(5):
-            for u in (range(2, 4) if e == 4 else range(4)):
-                if u == g[e] or (e < 4 and u == e // 2 + 2):
-                    continue
-                h = list(g); h[e] = u; h = tuple(h)
-                if h in idx:
-                    G.add_edge(idx[g], idx[h])
-    fit_ = np.array([fitness(list(g), and_funct) for g in genomes])
-    pos = nx.spring_layout(G, seed=4, k=0.35, iterations=300)
-    cmap = {0.0: PURP, 0.25: BLUE, 0.5: GREEN, 0.75: ORANGE, 1.0: YEL}
-    fig, ax = plt.subplots(figsize=(9.5, 8))
-    nx.draw_networkx_edges(G, pos, ax=ax, edge_color='#c8c8c8', width=0.5)
-    for f, c in cmap.items():
-        nodes = [i for i in G if fit_[i] == f]
-        nx.draw_networkx_nodes(G, pos, nodelist=nodes, node_color=c, node_size=70,
-                               edgecolors=INK, linewidths=0.5, ax=ax,
-                               label=f'fitness {f:g}  ({len(nodes)} genotypes)')
-    start = idx[(0, 1, 0, 1, 2)]
-    nx.draw_networkx_nodes(G, pos, nodelist=[start], node_color='none', node_size=260,
+    g2.warmup()
+    target = _target_array(and_funct)
+    genotypes, p0, p1, outs = g2.enumerate_genotypes()
+    fit_ = {g: g2.compute_fitness(*g, target) for g in genotypes}
+    G = g2.build_graph(genotypes, p0, p1, outs)
+    pos = nx.spring_layout(G, seed=7, k=1.8, iterations=300)
+    fig, ax = plt.subplots(figsize=(10, 8.5))
+    nx.draw_networkx_edges(G, pos, ax=ax, edge_color='#9a9a9a', width=0.8, alpha=0.6)
+    handles = []
+    for f, c in FITC.items():
+        nodes = [g for g in G if fit_[g] == f]
+        nx.draw_networkx_nodes(G, pos, nodelist=nodes, node_color=c, node_size=230,
+                               edgecolors=INK, linewidths=0.6, ax=ax)
+        handles.append(Patch(fc=c, ec=INK, lw=0.6, label=f'{f:g}   ({len(nodes)} genotypes)'))
+    start = ((0, 1), (0, 1), 2)                     # both gates NAND(I1, I2), O <- gate 1
+    nx.draw_networkx_nodes(G, pos, nodelist=[start], node_color='none', node_size=520,
                            edgecolors=VERM, linewidths=2.2, ax=ax)
-    x, y = pos[start]
-    ax.annotate('parallel start\n(NAND, fitness 0)', (x, y), xytext=(x + 0.25, y + 0.22),
-                fontsize=9.5, color=VERM, arrowprops=dict(arrowstyle='-', color=VERM, lw=1))
+    ax.annotate('parallel start\n(NAND, fitness 0)', pos[start], xytext=(1.02, 0.30),
+                textcoords='axes fraction', fontsize=9.5, color=VERM, ha='left', va='center',
+                arrowprops=dict(arrowstyle='-', color=VERM, lw=1, alpha=0.8))
     ax.axis('off')
-    ax.legend(loc='upper left', fontsize=9.5, title='target AND', title_fontsize=10)
+    ax.legend(handles=handles, loc='upper left', bbox_to_anchor=(1.0, 1.0), fontsize=9.5,
+              title='fitness for AND', title_fontsize=10)
     title(ax, f'Genotype graph of all acyclic networks with $N = 2$ '
               f'({G.number_of_nodes()} genotypes, {G.number_of_edges()} single-mutation links)')
     save(fig, 'fig2_genotype_graph.png', outdir)
@@ -396,42 +476,49 @@ def fig3(outdir, big):
     note(ax, 'output reads gate 1: computes NAND, fitness 0 for AND\n'
              'only 3 of the $2N+1$ edges are computing', loc=(0.02, 0.02), ha='left')
 
-    ax = axs[0, 1]; loglog(ax, ylabel='total mutations to AND, $\\langle M \\rangle$')
+    ax = axs[0, 1]; loglog(ax, ylabel='mean total mutations to evolve AND, $\\langle M \\rangle$')
     r = series('par_1e4', 'M')
     xx = np.logspace(np.log10(4), np.log10(r[-1, 0] * 1.3), 200)
-    ax.plot(xx, xx, color=MUTED, lw=1, ls=':', label='$y = N$')
-    ax.plot(xx, [exact_M_parallel(n) for n in xx], color=INK, lw=1, alpha=0.6,
-            label='exact $\\langle M \\rangle$ (bottleneck note, Eq. 3)')
+    ax.plot(xx, xx, color=MUTED, lw=1, ls=':', label='$y = x$ line')
+    ax.plot(xx, [exact_M_parallel(n) for n in xx], color=PINK, lw=1.1, ls='-.',
+            label='exact $\\langle M \\rangle$, analytic (not in paper)')
     dots(ax, r, BLUE, label='simulation (mean, 5–95%)')
-    f = fit_lines(ax, r, BLUE, big)
-    h = halves(r)
+    paper_fits(ax, r, BLUE, big, 1000)
+    t = thirds(r, 1000)
     ax.legend(loc='upper left', fontsize=9)
-    note(ax, f'paper ($N \\leq 10^3$): $9.8\\,N^{{0.96}}$\n'
-             f'lower / upper half of points: $b$ = {h[0]:.2f} / {h[1]:.2f}')
+    note(ax, 'paper ($N \\leq 10^3$): $9.8\\,N^{0.96}$; 3 subsets: $A = 9.6 \\pm 3.7$, $b = 0.96 \\pm 0.11$\n'
+             f'ours, 3 subsets of $N \\leq 10^3$: $A = {t[0]:.1f} \\pm {t[1]:.1f}$, '
+             f'$b = {t[2]:.2f} \\pm {t[3]:.2f}$')
     title(ax, 'B   mutations grow linearly with $N$')
 
-    ax = axs[1, 0]; loglog(ax, ylabel='mutations per run')
+    ax = axs[1, 0]; loglog(ax, ylabel='mean mutations to evolve AND')
     rf = series('par_1e4', 'fix'); rl = series('par_1e4', 'lost'); rfb = series('par_1e4', 'fix_ben')
     dots(ax, rl, BLUE, label='non-fixating')
     dots(ax, rf, ORANGE, label='fixating (all)', marker='s')
-    dots(ax, rfb, GREEN, label='fixating beneficial', marker='D', ms=5.5)
-    fitline(ax, rl, BLUE, label_fmt='non-fixating fit $y={A:.3g}\\,N^{{{b:.2f}}}$')
-    ax.legend(loc='upper left', fontsize=9)
-    note(ax, 'paper: non-fixating $9.5\\,N^{0.96}$; fixating ≈ const.\n'
-             'fixating neutral mutations ≈ $\\langle M\\rangle / N_P$ grow once $N \\gtrsim N_P/10$',
-         loc=(0.02, 0.70), ha='left', va='top')
+    dots(ax, rfb, GREEN, label='fixating beneficial (not in paper)', marker='D', ms=5.5)
+    fitline(ax, rl, BLUE, hi=1000, label_fmt='non-fixating, $N \\leq 10^3$: $y={A:.3g}\\,N^{{{b:.2f}}}$')
+    ax.legend(loc='upper left', fontsize=9, title_fontsize=8.5, alignment='left',
+              title='paper: non-fixating $9.5\\,N^{0.96}$; fixating ≈ const.\n'
+                    'fixating neutral ≈ $\\langle M\\rangle / N_P$: grows once $N \\gtrsim N_P/10$')
     title(ax, 'C   fixating vs non-fixating mutations')
 
     ax = axs[1, 1]
     ax.set_xscale('log'); ax.set_xlabel('network size $N$')
-    ax.set_ylabel('fraction of non-fixating mutations')
+    ax.set_ylabel('mean fraction of non-fixating mutations')
     ax.grid(True, color=GRID_C, lw=0.6)
-    for key, c, lab, mk in [('frac_neu', SKY, 'neutral', 'o'), ('frac_del', VERM, 'deleterious', 's'),
-                            ('frac_ben', GREEN, 'beneficial', 'D')]:
+    keys = [('frac_neu', SKY, 'neutral', 'o'), ('frac_del', VERM, 'deleterious', 's'),
+            ('frac_ben', GREEN, 'beneficial', 'D')]
+    for key, c, lab, mk in keys:
         dots(ax, series('par_1e4', key), c, label=lab, marker=mk)
-    ax.set_yscale('symlog', linthresh=1e-5)
-    ax.set_ylim(0, 1.6)
-    ax.legend(loc='center right', fontsize=9.5)
+    ax.set_ylim(-0.02, 1.02)
+    ax.legend(loc='center left', fontsize=9.5)
+    ins = ax.inset_axes([0.50, 0.26, 0.46, 0.42])
+    for key, c, lab, mk in keys[1:]:
+        rr = series('par_1e4', key)
+        ins.plot(rr[:, 0], rr[:, 1], mk, color=c, mec=INK, mew=0.5, ms=4.5)
+    ins.set_xscale('log'); ins.set_yscale('log')
+    ins.set_title('means on a log scale', fontsize=8.5, color=MUTED)
+    ins.tick_params(labelsize=7.5); ins.grid(True, color=GRID_C, lw=0.5)
     title(ax, 'D   almost every lost mutation is neutral')
     save(fig, 'fig3_network_size.png', outdir)
 
@@ -439,29 +526,33 @@ def fig3(outdir, big):
 # ── figure 4: origin of linear scaling ────────────────────────────────────────
 
 def mech_panels(axs, exp, big, color, ce_ref=None, dloc=dict(loc='center right')):
-    """Computing edges, f_b, and P(c), P(b|c) panels for one experiment."""
-    ax = axs[0]; loglog(ax, ylabel='computing edges per resident')
+    """Computing edges, f_b, and (if a third axis is given) P(c), P(b|c) panels."""
+    ax = axs[0]; loglog(ax, ylabel='mean number of computing edges\n(averaged over residents)')
     r = series(exp, 'ce')
     if ce_ref is None:
         ax.set_yscale('linear'); ax.set_ylim(0, max(12, r[:, 3].max() * 1.15))
-    dots(ax, r, color, label='simulation (mean, 5–95%)')
-    fit_lines(ax, r, color, big)
-    if ce_ref:
+    else:
         xx = np.logspace(np.log10(r[0, 0]), np.log10(r[-1, 0]), 50)
-        ax.plot(xx, ce_ref(xx), color=MUTED, lw=1, ls=':', label=ce_ref.__doc__)
+        ax.plot(xx, ce_ref(xx), color='#bdbdbd', lw=5, solid_capstyle='round', zorder=1,
+                label=ce_ref.__doc__)
+    dots(ax, r, color, label='simulation (mean, 5–95%)')
+    if ce_ref is not None:
+        fit_lines(ax, r, color, big)
     ax.legend(loc='upper left', fontsize=9)
 
     ax = axs[1]; ax.set_xscale('log'); ax.set_xlabel('network size $N$')
-    ax.set_ylabel('$f_b$: fraction of beneficial rewirings\nper computing edge')
+    ax.set_ylabel('mean fraction of beneficial mutations\nper computing edge, $f_b$')
     ax.grid(True, color=GRID_C, lw=0.6)
     r = series(exp, 'fb')
     dots(ax, r, color, label='simulation (mean, 5–95%)')
-    ax.set_ylim(0, max(0.6, r[:, 3].max() * 1.1))
+    ax.set_ylim(0, 1)
     f = fit(r)
     if f:
-        note(ax, f'power-law fit exponent: {f[1]:+.3f} ± {f[2]:.3f}', loc=(0.98, 0.95), va='top')
+        note(ax, f'power-law fit exponent, all $N$: {num(f[1], "{:+.3f}")}', loc=(0.98, 0.95), va='top')
     ax.legend(loc='lower left', fontsize=9)
 
+    if len(axs) < 3:
+        return
     ax = axs[2]; loglog(ax, ylabel='probability')
     rc, rb = series(exp, 'pc'), series(exp, 'fb')
     dots(ax, rc, BLUE, label='$P(c)$ = computing edges / $(2N+1)$', bars=False)
@@ -478,23 +569,108 @@ def mech_panels(axs, exp, big, color, ce_ref=None, dloc=dict(loc='center right')
     ax.legend(fontsize=9, **dloc)
 
 
-def fig4(outdir, big):
-    fig, axs = plt.subplots(2, 2, figsize=(13, 10.5))
-    ax = axs[0, 0]; blank(ax, (0, 20), (0, 10))
-    title(ax, 'A   computing edges (blue) before and after a mutation')
-    sub1 = ax.inset_axes([0.0, 0.08, 0.48, 0.88]); blank(sub1); draw_parallel(sub1, computing=BLUE)
-    sub2 = ax.inset_axes([0.52, 0.08, 0.48, 0.88]); blank(sub2)
-    draw_parallel(sub2, computing=BLUE, rewired=True)
-    sub1.text(5, 0.6, '3 computing edges', ha='center', fontsize=10, color=BLUE)
-    sub2.text(5, 0.6, '$I_1 \\to 1$ rewired to $2 \\to 1$: 5', ha='center', fontsize=10, color=BLUE)
-    note(ax, 'computing edge: on a path from the inputs to $O$', loc=(0.5, 0.0), ha='center')
+def draw_par_state(ax, edges, count):
+    """Parallel-start network for Fig. 4A. edges: (src, dst, kind, new) with kind
+    'c' (computing, blue) or 'n' (non-computing, black); new edges are dashed."""
+    P = {'I1': (3.2, 8.7), 'I2': (6.4, 8.7), '1': (1.6, 5.4), '2': (4.2, 5.4), 'N': (8.6, 5.4),
+         'O': (2.9, 2.2)}
+    for k in ('I1', 'I2', 'O'):
+        node(ax, P[k], {'I1': '$I_1$', 'I2': '$I_2$', 'O': '$O$'}[k], '#e3e3e3', w=1.3, h=0.9)
+    for k in ('1', '2', 'N'):
+        node(ax, P[k], k if k != 'N' else '$N$', w=1.1, h=0.9)
+    ax.text(6.4, 5.4, '…', ha='center', va='center', fontsize=14)
+    for a, b, kind, new in edges:
+        c, lw, ls = SKY if kind == 'c' else INK, 2.0 if kind == 'c' else 1.0, '--' if new else '-'
+        if P[a][1] == P[b][1]:                     # gate -> gate on the same row: side to side
+            ax.add_patch(FancyArrowPatch((P[a][0] - 0.55, P[a][1]), (P[b][0] + 0.55, P[b][1]),
+                                         arrowstyle='-|>', mutation_scale=12, color=c, lw=lw, ls=ls,
+                                         shrinkA=1, shrinkB=1, zorder=4))
+        else:
+            dup = new and any(e[:2] == (a, b) and not e[3] for e in edges)
+            arrow(ax, P[a], P[b], color=c, lw=lw, ls=ls, h=0.9, rad=-0.25 if dup else 0.0)
+    ax.text(5.2, 2.2, f'computing edges = {count}', va='center', fontsize=10,
+            color=BLUE if count else INK)
 
-    mech_panels([axs[0, 1], axs[1, 0], axs[1, 1]], 'par_1e4', big, BLUE,
-                dloc=dict(loc='lower left', bbox_to_anchor=(0, 0.07)))
-    title(axs[0, 1], 'B   computing edges stay ≈ constant')
-    title(axs[1, 0], 'C   $f_b$ is roughly independent of $N$')
-    title(axs[1, 1], 'D   so $P(b) \\propto P(c) P(b|c) \\sim 1/N$')
+
+def draw_neighbourhood(ax, kinds, seed=1, arcs=True, weights=(0.25, 0.35, 0.25, 0.1, 0.05)):
+    """Schematic local genotype graph (paper Figs 4D, 5D): one cluster per edge of the
+    central network; kinds[i] = 'c' (computing edge: mixed fitness) or 'n' (neutral)."""
+    from matplotlib.patches import Arc, Patch
+    ax.set_xlim(-1.75, 1.75); ax.set_ylim(-1.55, 1.55); ax.set_aspect('equal'); ax.axis('off')
+    rng = np.random.default_rng(seed)
+    cats = list(FITC)
+    k = len(kinds)
+    for i, kd in enumerate(kinds):
+        th0 = np.pi / 2 + 2 * np.pi * i / k
+        for a in th0 + np.linspace(-0.27, 0.27, 6):
+            x, y = 1.05 * np.cos(a), 1.05 * np.sin(a)
+            f = cats[rng.choice(5, p=weights)] if kd == 'c' else 0.25
+            ax.plot([0, x], [0, y], color=SKY if kd == 'c' else INK, lw=0.9, zorder=1)
+            ax.scatter([x], [y], s=60, c=FITC[f], edgecolors=INK, linewidths=0.7, zorder=3)
+    ax.scatter([0], [0], s=420, c=FITC[0.25], edgecolors=INK, linewidths=1, zorder=4)
+    if arcs:
+        ang = [np.degrees(np.pi / 2 + 2 * np.pi * i / k) for i in range(k)]
+        cs = [a for a, kd in zip(ang, kinds) if kd == 'c']
+        ns = [a for a, kd in zip(ang, kinds) if kd == 'n']
+        if cs and ns:
+            ax.add_patch(Arc((0, 0), 2.6, 2.6, theta1=min(cs) - 22, theta2=max(cs) + 22, color=SKY, lw=1.5))
+            ax.add_patch(Arc((0, 0), 2.75, 2.75, theta1=max(cs) + 26, theta2=min(cs) - 26 + 360,
+                             color=INK, lw=1.2))
+            m = np.radians(np.mean(cs))
+            ax.text(1.5 * np.cos(m), 1.5 * np.sin(m), '$O(N)$', color=BLUE, fontsize=12,
+                    ha='center', va='center')
+            ax.text(1.52, -0.05, '$O(N^2)$', fontsize=12, ha='left', va='center')
+    ax.legend(handles=[Patch(fc=c, ec=INK, lw=0.6, label=f'{f:g}') for f, c in FITC.items()],
+              title='fitness', fontsize=8.5, title_fontsize=9, loc='upper left',
+              bbox_to_anchor=(0.97, 1.0), frameon=True, edgecolor='#cccccc')
+
+
+def fig4(outdir, big):
+    fig = plt.figure(figsize=(18, 11.5))
+    gs = fig.add_gridspec(2, 3, width_ratios=[0.85, 1, 1])
+    ax = fig.add_subplot(gs[:, 0]); blank(ax)
+    title(ax, 'A   computing edges (blue) as mutations occur')
+    S = [([('I1', '1', 'c', 0), ('I2', '1', 'c', 0), ('I1', '2', 'n', 0), ('I2', '2', 'n', 0),
+           ('I1', 'N', 'n', 0), ('I2', 'N', 'n', 0), ('1', 'O', 'c', 0)], 3),
+         ([('I1', '1', 'c', 0), ('2', '1', 'c', 1), ('I1', '2', 'c', 0), ('I2', '2', 'c', 0),
+           ('I1', 'N', 'n', 0), ('I2', 'N', 'n', 0), ('1', 'O', 'c', 0)], 5),
+         ([('I1', '1', 'n', 0), ('2', '1', 'n', 0), ('I1', '2', 'c', 0), ('I2', '2', 'c', 0),
+           ('I1', 'N', 'n', 0), ('I2', 'N', 'n', 0), ('2', 'O', 'c', 1)], 3),
+         ([('I1', '1', 'n', 0), ('2', '1', 'n', 0), ('I1', '2', 'c', 0), ('I2', '2', 'c', 0),
+           ('I2', 'N', 'n', 1), ('I2', 'N', 'n', 0), ('2', 'O', 'c', 0)], 3)]
+    steps = ['$I_2 \\to 1$ rewired to $2 \\to 1$', '$1 \\to O$ rewired to $2 \\to O$',
+             '$I_1 \\to N$ rewired to $I_2 \\to N$ (non-computing)']
+    h = 0.235
+    for k, (edges, cnt) in enumerate(S):
+        sub = ax.inset_axes([0.0, 1 - (k + 1) * h - k * 0.02, 1.0, h]); blank(sub)
+        draw_par_state(sub, edges, cnt)
+        if k < 3:
+            yk = 1 - (k + 1) * h - k * 0.02 - 0.005
+            ax.annotate('', xy=(0.12, yk - 0.012), xytext=(0.12, yk + 0.012), xycoords='axes fraction',
+                        arrowprops=dict(arrowstyle='-|>', color=INK, lw=1.1))
+            ax.text(0.17, yk, steps[k], transform=ax.transAxes, fontsize=9, va='center', color=MUTED)
+    note(ax, 'new edges dashed; computing = on a path from the inputs to $O$', loc=(0.5, -0.02),
+         ha='center', va='top')
+
+    axB, axC = fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[1, 1])
+    axD, axE = fig.add_subplot(gs[0, 2]), fig.add_subplot(gs[1, 2])
+    mech_panels([axB, axC, axE], 'par_1e4', big, BLUE, dloc=dict(loc='lower left', bbox_to_anchor=(0, 0.07)))
+    title(axB, 'B   computing edges stay ≈ constant')
+    title(axC, 'C   $f_b$ is roughly independent of $N$')
+    draw_neighbourhood(axD, ['n', 'c', 'c', 'n', 'n', 'n'], seed=3)
+    title(axD, 'D   local neighbourhood of a genotype')
+    title(axE, 'E   so $P(b) \\propto P(c) P(b|c) \\sim 1/N$ (not in paper)')
     save(fig, 'fig4_mechanism.png', outdir)
+
+
+def dominant_runs(exp, rows, share=0.25):
+    """(N, M) of single runs that make up more than `share` of all mutations at that N."""
+    out = []
+    for N in rows[:, 0]:
+        M = load(exp, int(N))['M']
+        if M.max() > share * M.sum():
+            out.append((int(N), M.max()))
+    return out
 
 
 # ── figure 5: chain start ─────────────────────────────────────────────────────
@@ -508,22 +684,32 @@ def fig5(outdir, big):
              'odd $N$: computes NAND, fitness 0 for AND', loc=(0.02, 0.0), ha='left')
 
     def ref(n):
-        """$y = 2N$"""
+        """$y = 2N$ (paper's fit)"""
         return 2 * n
-    mech_panels([axs[0, 1], axs[0, 2], axs[1, 0]], 'chain_1e4', big, VERM, ce_ref=ref)
+    mech_panels([axs[0, 1], axs[0, 2]], 'chain_1e4', big, VERM, ce_ref=ref)
+    h = halves(series('chain_1e4', 'ce', nmax=601))
     title(axs[0, 1], 'B   computing edges grow as $2N$')
-    note(axs[0, 1], 'paper: $y = 2N^{1.0}$')
+    note(axs[0, 1], f'paper: $y = 2N^{{1.0}}$, halves 0.99 / 1\nours ($N \\leq 601$): halves '
+                    f'{h[0]:.2f} / {h[1]:.2f}')
     title(axs[0, 2], 'C   $f_b$ levels off for $N > 20$')
-    title(axs[1, 0], 'D   $P(c) \\approx 1$: $P(b)$ independent of $N$')
 
-    ax = axs[1, 1]; loglog(ax, ylabel='total mutations to AND')
+    draw_neighbourhood(axs[1, 0], ['c'] * 6, seed=5, arcs=False, weights=(0.3, 0.3, 0.25, 0.1, 0.05))
+    axs[1, 0].text(0, -1.5, 'every mutation hits a computing edge: $O(N^2)$ such neighbours',
+                   ha='center', fontsize=9, color=MUTED)
+    title(axs[1, 0], 'D   local neighbourhood of the chain')
+
+    ax = axs[1, 1]; loglog(ax, ylabel='mean total mutations to evolve AND')
     r = series('chain_1e4', 'M'); rm = series('chain_1e4', 'M', stat='median')
     dots(ax, r, VERM, label='mean (5–95%)')
-    dots(ax, rm, VERM, label='median', hollow=True, marker='s', bars=False, offset=1.12)
-    fit_lines(ax, r, VERM, big)
-    h = halves(r)
+    dots(ax, rm, VERM, label='median (not in paper)', hollow=True, marker='s', bars=False, offset=1.12)
+    paper_fits(ax, r, VERM, big, 601)
+    h = halves(r[r[:, 0] <= 601])
     ax.legend(loc='upper left', fontsize=9)
-    note(ax, f'paper ($N \\leq 501$): $31\\,N^{{0.07}}$\nhalves: $b$ = {h[0]:.2f} / {h[1]:.2f}')
+    txt = (f'paper ($N \\leq 601$): $31\\,N^{{0.07}}$, halves 0.07 / −0.09\n'
+           f'ours ($N \\leq 601$): halves {num(h[0])} / {num(h[1])}')
+    for N, Mx in dominant_runs('chain_1e4', r):
+        txt += f'\n$N = {N}$: mean set by one run with $M$ = {Mx:,.0f}'
+    note(ax, txt)
     title(ax, 'E   mutations do not grow with $N$')
 
     ax = axs[1, 2]; loglog(ax, ylabel='$\\langle M \\rangle \\times P(c)\\,P(b|c)$')
@@ -535,35 +721,36 @@ def fig5(outdir, big):
         dots(ax, y, c, label=lab, marker=mk, bars=False)
     ax.set_ylim(1, 300); ax.keep_ylim = True
     ax.legend(loc='upper left', fontsize=9)
-    note(ax, 'Eq. 2: $\\langle M\\rangle \\approx$ (steps) / $(P(c) P(b|c) P_{fix})$\n'
-             'flat in $N$ for both starts: the scaling of $\\langle M\\rangle$\n'
-             'is the scaling of $1 / P(c)P(b|c)$')
-    title(ax, 'F   Eq. 2 accounts for both scalings')
+    note(ax, 'Eq. 2: $\\langle M\\rangle \\cdot P(c)P(b|c) \\approx$ (steps) / $P_{fix}$\n'
+             '(product of means); flat in $N$ for both starts')
+    title(ax, 'F   Eq. 2 accounts for both scalings (not in paper)')
     save(fig, 'fig5_chain_start.png', outdir)
 
 
 # ── supplementary figures ─────────────────────────────────────────────────────
 
 def figS1(outdir, big):
-    fig, axs = plt.subplots(1, 2, figsize=(13, 5.4))
-    ax = axs[0]; loglog(ax, ylabel='mutations to AND')
+    fig, axs = plt.subplots(1, 2, figsize=(13, 5.6))
+    ax = axs[0]; loglog(ax, ylabel='mean number of mutations to reach AND')
     r = series('rw', 'M')
-    dots(ax, r, PURP, label='random walk (every mutation accepted)')
-    fit_lines(ax, r, PURP, big)
     dots(ax, series('par_1e4', 'M', nmax=r[-1, 0] if len(r) else None), BLUE,
-         label='with selection, $N_P = 10^4$ (Fig. 3B)', bars=False, hollow=True)
-    h = halves(r)
-    ax.legend(loc='upper left', fontsize=9)
-    note(ax, f'paper: $18.7\\,N^{{0.8}}$\nhalves: $b$ = {h[0]:.2f} / {h[1]:.2f}' if h else 'paper: $18.7\\,N^{0.8}$')
+         label='with selection, $N_P = 10^4$ (Fig. 3B; not in paper)', bars=False, hollow=True,
+         offset=1.15, ms=5.5)
+    dots(ax, r, PURP, label='random walk (mean, 5–95%)')
+    paper_fits(ax, r, PURP, big, 1000)
+    t = thirds(r, 1000)
+    ax.legend(loc='upper left', fontsize=8.8)
+    note(ax, 'paper ($N \\leq 10^3$): $18.7\\,N^{0.8}$; 3 subsets: $b = 0.8 \\pm 0.2$\n'
+             f'ours, 3 subsets of $N \\leq 10^3$: $b = {t[2]:.2f} \\pm {t[3]:.2f}$')
     title(ax, 'A   random walk from the parallel start')
     ax = axs[1]; loglog(ax, ylabel='computing edges per network visited')
     r = series('rw', 'ce')
-    dots(ax, r, PURP, label='random walk')
+    dots(ax, r, PURP, label='random walk (mean, 5–95%;\nlower bars = minimal module, 3–5 edges)')
     fitline(ax, r, PURP)
     dots(ax, series('par_1e4', 'ce', nmax=r[-1, 0] if len(r) else None), BLUE,
          label='with selection, $N_P = 10^4$', bars=False, hollow=True)
     ax.legend(loc='upper left', fontsize=9)
-    title(ax, 'B   without selection the computing module grows')
+    title(ax, 'B   without selection the module grows (not in paper)')
     save(fig, 'figS1_random_walk.png', outdir)
 
 
@@ -572,15 +759,18 @@ def figS2(outdir, big):
     for ax, N, lab in [(axs[0, 0], 40, 'A'), (axs[0, 1], 400, 'B')]:
         d = load('par_1e4', N)
         M = d['M']
-        ax.hist(M, bins=40, color=BLUE, alpha=0.85, ec='white', lw=0.5)
+        top = np.percentile(M, 99.5)
+        ax.hist(M[M <= top], bins=np.linspace(0, top, 30), color=BLUE, alpha=0.85, ec='white', lw=0.5)
         ax.axvline(M.mean(), color=INK, lw=1.4, label=f'mean {M.mean():.0f}')
         ax.axvline(np.median(M), color=INK, lw=1.4, ls='--', label=f'median {np.median(M):.0f}')
-        ax.set_xlabel('total mutations to AND'); ax.set_ylabel('runs')
+        ax.set_xlim(0, top)
+        ax.set_xlabel('number of mutations to evolve AND'); ax.set_ylabel('number of simulations')
         ax.legend(fontsize=9.5)
+        note(ax, f'{(M > top).sum()} runs beyond the axis (max {M.max():,.0f})', loc=(0.98, 0.70), va='top')
         title(ax, f'{lab}   distribution at $N = {N}$ ({len(M)} runs)')
     ax = axs[1, 0]
     ax.set_xscale('log'); ax.set_yscale('log')
-    ax.set_xlabel('$M / \\langle M \\rangle$'); ax.set_ylabel('fraction of runs with larger $M$')
+    ax.set_xlabel('$M / \\langle M \\rangle$'); ax.set_ylabel('fraction of runs with $M$ at least this large')
     ax.grid(True, color=GRID_C, lw=0.6)
     Ns = [n for n in EXPS['par_1e4'][3] if n <= NMAX and load('par_1e4', n) is not None]
     cm = plt.get_cmap('viridis')
@@ -589,81 +779,100 @@ def figS2(outdir, big):
         surv = 1 - np.arange(len(M)) / len(M)
         ax.plot(M / M.mean(), surv, color=cm(i / max(len(Ns) - 1, 1)), lw=1.2,
                 label=f'$N={N:,}$' if i in (0, len(Ns) // 2, len(Ns) - 1) else None)
-    x = np.logspace(-2, 1, 50)
+    x = np.logspace(-2, np.log10(7), 50)
     ax.plot(x, np.exp(-x), color=INK, ls=':', lw=1.2, label='exponential $e^{-x}$')
-    ax.set_ylim(1e-3, 1.3); ax.set_xlim(1e-2, 15)
+    ax.set_ylim(1e-3, 1.3); ax.set_xlim(1e-2, 15); ax.keep_ylim = ax.keep_xlim = True
     ax.legend(fontsize=9)
-    title(ax, 'C   one shape at every $N$ (rescaled survival curves)')
-    ax = axs[1, 1]; loglog(ax, ylabel='median total mutations to AND')
+    title(ax, 'C   one shape at every $N$ (not in paper)')
+    ax = axs[1, 1]; loglog(ax, ylabel='median number of mutations to evolve AND')
     r = series('par_1e4', 'M', stat='median')
-    dots(ax, r, BLUE, label='median (5–95%)')
-    fit_lines(ax, r, BLUE, big)
+    dots(ax, r, BLUE, label='median (5–95% of runs)')
+    paper_fits(ax, r, BLUE, big, 1000)
     ax.legend(loc='upper left', fontsize=9)
-    note(ax, 'paper: $7.8\\,N^{0.96}$')
+    note(ax, 'paper ($N \\leq 10^3$): $7.8\\,N^{0.96}$, no error bars')
     title(ax, 'D   median grows like the mean')
     save(fig, 'figS2_distributions.png', outdir)
 
 
 def figS3(outdir, big):
-    fig, axs = plt.subplots(1, 3, figsize=(18, 5.6))
-    for ax, (exp, lab, paper) in zip(axs, [
+    fig, axs = plt.subplots(1, 3, figsize=(18, 5.8))
+    for k, (ax, (exp, lab, paper)) in enumerate(zip(axs, [
             ('andnot_10', '$I_1$ AND NOT $I_2$', '$107.8\\,N^{0.82}$ [0.64, 0.95]'),
             ('or_10', 'OR', '$64.6\\,N^{0.86}$ [0.78, 0.94]'),
-            ('true_10', 'TRUE', '$34.8\\,N^{0.91}$ [0.86, 0.94]')]):
-        loglog(ax, ylabel=f'mutations to {lab}')
+            ('true_10', 'TRUE', '$34.8\\,N^{0.91}$ [0.86, 0.94]')])):
+        loglog(ax, ylabel=f'mean number of mutations to evolve {lab}')
         r = series(exp, 'M')
         dots(ax, r, PINK, label='simulation (mean, 5–95%)')
-        fit_lines(ax, r, PINK, big)
-        txt = f'paper: {paper}'
-        if len(r) >= 7:
-            txt += f'\nfirst 3 / last 4 points: $b$ = {fit(r[:3])[1]:.2f} / {fit(r[-4:])[1]:.2f}'
+        paper_fits(ax, r, PINK, big, 1000)
+        rp = r[r[:, 0] <= 1000]
+        txt = f'paper ($N \\leq 10^3$): {paper}'
+        if len(rp) >= 7:
+            txt += (f'\nours, first 3 / last 4 points of $N \\leq 10^3$: '
+                    f'[{fit(rp[:3])[1]:.2f}, {fit(rp[-4:])[1]:.2f}]')
         note(ax, txt)
         ax.legend(loc='upper left', fontsize=9)
-        title(ax, f'{"ABC"[axs.tolist().index(ax)]}   NAND → {lab}, $N_P = 10$')
+        title(ax, f'{"ABC"[k]}   NAND → {lab}, $N_P = 10$')
     save(fig, 'figS3_other_targets.png', outdir)
 
 
-def small_pop(outdir, big, exp, exp_big, color, name, letter_titles, paper_notes):
+def small_pop(outdir, big, exp, exp_big, color, name, letter_titles, paper_notes, paper_hi,
+              subsets, pc_linear=False):
+    """Figs S4 / S5. paper_hi: the paper's largest N; subsets: its two N ranges for
+    the sensitivity exponents; paper_notes: its (overall, subset) numbers per panel."""
+    def compare(r, paper):
+        b = b_on(r, 0, paper_hi)
+        lo, hi = (b_on(r, *rg) for rg in subsets)
+        return (f'paper: {paper}\nours ($N \\leq {paper_hi}$): {num(b)} '
+                f'({num(lo)} / {num(hi)})')
+
     fig, axs = plt.subplots(2, 2, figsize=(13, 10.5))
-    ax = axs[0, 0]; loglog(ax, ylabel='total mutations to AND')
+    ax = axs[0, 0]; loglog(ax, ylabel='mean total mutations to evolve AND')
     r = series(exp, 'M')
     dots(ax, r, color, label='$N_P = 10$ (mean, 5–95%)')
-    fit_lines(ax, r, color, big)
-    h = halves(r)
-    note(ax, paper_notes[0] + (f'\nhalves: $b$ = {h[0]:.2f} / {h[1]:.2f}' if h else ''))
+    if pc_linear:
+        dots(ax, series(exp, 'M', stat='median'), color, label='median (not in paper)', hollow=True,
+             marker='s', bars=False, offset=1.12)
+    paper_fits(ax, r, color, big, paper_hi)
+    note(ax, compare(r, paper_notes[0]))
     ax.legend(loc='upper left', fontsize=9)
     title(ax, letter_titles[0])
-    ax = axs[0, 1]; loglog(ax, ylabel='fixating mutations per run')
+
+    ax = axs[0, 1]; loglog(ax, ylabel='mean number of fixating mutations')
     rfx = series(exp, 'fix')
     dots(ax, rfx, color, label='$N_P = 10$')
     dots(ax, series(exp_big, 'fix', nmax=rfx[-1, 0] if len(rfx) else None), INK,
          label='$N_P = 10^4$', hollow=True, marker='s')
-    dots(ax, series(exp, 'fix_ben'), GREEN, label='$N_P = 10$, beneficial only', marker='D',
-         ms=5, bars=False)
+    dots(ax, series(exp, 'fix_ben'), PURP, label='$N_P = 10$, beneficial only (not in paper)',
+         marker='D', ms=4.5, bars=False, offset=1.15)
     ax.legend(loc='upper left', fontsize=9)
     title(ax, letter_titles[1])
-    ax = axs[1, 0]; loglog(ax, ylabel='$P(c)$')
+
+    ax = axs[1, 0]
     r = series(exp, 'pc')
+    if pc_linear:
+        ax.set_xscale('log'); ax.set_xlabel('network size $N$'); ax.set_ylabel('$P(c)$')
+        ax.grid(True, color=GRID_C, lw=0.6); ax.set_ylim(0, 1.05)
+    else:
+        loglog(ax, ylabel='$P(c)$')
     dots(ax, r, color, label='$N_P = 10$')
     dots(ax, series(exp_big, 'pc', nmax=r[-1, 0] if len(r) else None), INK,
-         label='$N_P = 10^4$', hollow=True, marker='s', bars=False)
-    fit_lines(ax, r, color, big)
-    h = halves(r)
-    note(ax, paper_notes[1] + (f'\nhalves: $b$ = {h[0]:.2f} / {h[1]:.2f}' if h else ''),
-         loc=(0.02, 0.04), ha='left')
-    ax.legend(loc='upper right', fontsize=9)
+         label='$N_P = 10^4$ (not in paper)', hollow=True, marker='s', bars=False)
+    paper_fits(ax, r, color, big, paper_hi)
+    note(ax, compare(r, paper_notes[1]), loc=(0.02, 0.04), ha='left')
+    ax.legend(loc='upper right' if not pc_linear else 'lower right',
+              bbox_to_anchor=None if not pc_linear else (1.0, 0.12), fontsize=9)
     title(ax, letter_titles[2])
+
     ax = axs[1, 1]; ax.set_xscale('log'); ax.set_xlabel('network size $N$')
     ax.set_ylabel('$P(b\\,|\\,c) = \\langle f_b \\rangle$'); ax.grid(True, color=GRID_C, lw=0.6)
     r = series(exp, 'fb')
     dots(ax, r, color, label='$N_P = 10$')
     dots(ax, series(exp_big, 'fb', nmax=r[-1, 0] if len(r) else None), INK,
-         label='$N_P = 10^4$', hollow=True, marker='s', bars=False)
-    f = fit(r)
-    note(ax, paper_notes[2] + (f'\nfit exponent here: {f[1]:+.3f}' if f else ''),
-         loc=(0.98, 0.95), va='top')
-    ax.set_ylim(0, 0.75)
-    ax.legend(loc='lower left', fontsize=9)
+         label='$N_P = 10^4$ (not in paper)', hollow=True, marker='s', bars=False)
+    paper_fits(ax, r, color, big, paper_hi)
+    note(ax, compare(r, paper_notes[2]), loc=(0.98, 0.95), va='top')
+    ax.set_ylim(0, 1.0)
+    ax.legend(loc='upper left', fontsize=8.5)
     title(ax, letter_titles[3])
     save(fig, name, outdir)
 
@@ -672,29 +881,36 @@ def figS4(outdir, big):
     small_pop(outdir, big, 'par_10', 'par_1e4', ORANGE, 'figS4_small_population.png',
               ['A   $N_P = 10$: total mutations', 'B   fixating mutations',
                'C   $P(c)$ falls, then levels off', 'D   $P(b|c)$ nearly flat'],
-              ['paper: exponent 0.90 (0.87 / 0.92)', 'paper: $-0.85$ ($-0.81$ / $-0.87$)',
-               'paper: $-0.020$ ($-0.049$ / $-0.012$)'])
+              ['0.90 (0.87 / 0.92)', '−0.85 (−0.81 / −0.87)', '−0.020 (−0.049 / −0.012)'],
+              600, [(5, 40), (60, 600)])
 
 
 def figS5(outdir, big):
     small_pop(outdir, big, 'chain_10', 'chain_1e4', GREEN, 'figS5_small_population_chain.png',
               ['A   chain start, $N_P = 10$: total mutations', 'B   fixating mutations',
                'C   $P(c) \\approx 1$', 'D   $P(b|c)$'],
-              ['paper: $41.3\\,N^{0.10}$ (0.21 / $-0.17$)', 'paper: exponent 0.027',
-               'paper: $-0.135$ ($-0.238$ / $-0.036$)'])
+              ['$41.3\\,N^{0.10}$ (0.21 / −0.17)', '0.027 (0.046 / 0.014)', '−0.135 (−0.238 / −0.036)'],
+              501, [(5, 41), (81, 501)], pc_linear=True)
 
 
 def figS6(outdir, big):
-    fig, axs = plt.subplots(1, 2, figsize=(13, 5.4))
-    for ax, exp, c, lab, exp_slope in [(axs[0], 'par_1e4', BLUE, 'A   parallel start: time is flat', 0),
-                                       (axs[1], 'chain_1e4', VERM, 'B   chain start: time falls as $1/N$', -1)]:
-        loglog(ax, ylabel='time to evolve AND (model time units)')
+    fig, axs = plt.subplots(1, 2, figsize=(13, 5.6))
+    for ax, exp, c, lab, lin in [(axs[0], 'par_1e4', BLUE, 'A   parallel start: time is flat', True),
+                                 (axs[1], 'chain_1e4', VERM, 'B   chain start: time falls ≈ as $1/N$', False)]:
+        loglog(ax, ylabel='mean time to evolve AND')
         r = series(exp, 'T')
         dots(ax, r, c, label='simulation (mean, 5–95%)')
-        fit_lines(ax, r, c, big)
-        ax.legend(loc='upper right' if exp_slope else 'upper left', fontsize=9)
-        note(ax, '$T \\mid M \\sim$ Gamma$(M,\\ \\tau / (N_P (2N+1)))$, $\\tau = 1000$\n'
-                 '$\\langle T \\rangle \\propto \\langle M \\rangle / N$', loc=(0.02, 0.04), ha='left')
+        f = fit(r)
+        fitline(ax, r, MUTED, ls='--', lw=1.0,
+                label_fmt='fit, all $N$ (not in paper): $y={A:.3g}\\,N^{{{b:.2f}}}$')
+        if lin:
+            ax.set_yscale('linear'); ax.set_ylim(0, 2)
+            ax.legend(loc='upper right', fontsize=9)
+            note(ax, 'time drawn after the run:\n$T \\mid M \\sim$ Gamma$(M,\\ \\tau / (N_P (2N+1)))$, $\\tau = 1000$;\n'
+                     "same distribution as the Methods' exponential waits", loc=(0.02, 0.80),
+                 ha='left', va='top')
+        else:
+            ax.legend(loc='lower left', fontsize=9)
         title(ax, lab)
     save(fig, 'figS6_time.png', outdir)
 

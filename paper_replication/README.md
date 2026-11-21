@@ -56,14 +56,38 @@ mutation then costs O(module) to evaluate, so the larger sizes would take days.
 As in the paper, the plots show means over runs, with error bars at the 5th and
 95th percentiles of the per-run values.
 
+## Comparing with the paper
+
+- Each scaling panel draws a solid fit over the paper's own N range (N ≤ 10³,
+  or 600 / 501 / 601 where the paper stopped there) and a dashed fit over the
+  extension (N ≥ 10³ in `figs_1e4`, N ≥ 10⁴ in `figs_1e6`).
+- The notes print the paper's numbers next to ours over the same range, using
+  the paper's sensitivity checks: 3-subset mean ± SD in Figs 3B and S1, first 3 /
+  last 4 points in S3, and the paper's two subsets in S4 and S5.
+- Schematics follow the paper:
+  - Fig 1: the paper's network, its I₁→1 ⇒ 2→1 mutation, and the branching
+    flowchart.
+  - Fig 2: 54 genotypes, from `gen_fig2.py`.
+  - Fig 4A: the four-step mutation sequence.
+  - Figs 4D and 5D: genotype-neighbourhood schematics.
+- Panels that are not in the paper are marked "(not in paper)".
+- **Known issue (not yet fixed):** f_b is averaged over every resident,
+  including the final network that already computes AND, whose f_b is 0.
+  - This pulls P(b|c) low when runs have few residents.
+  - The apparent rise of P(b|c) with N comes from neutral fixations diluting
+    that zero.
+  - Excluding the final resident reproduces the paper's chain-start values. It
+    overshoots the parallel-start values (≈0.42 vs 0.37).
+
 ## Main results (figs_1e6)
 
 - **Fig 3**, parallel start, N_P = 10⁴: M ≈ 8.7 N^0.99, and the fit over
   N ≥ 10⁴ gives N^1.01. The near-linear scaling holds all the way to 10⁶.
-- **Fig 4**: P(c) ~ N^−1.01. P(b|c) creeps from 0.29 to 0.38 (about N^+0.03).
-  So Eq. 2 explains M ∝ N.
+- **Fig 4**: P(c) ~ N^−1.01, so Eq. 2 explains M ∝ N. The current P(b|c)
+  values are affected by the known issue above.
 - **Fig 5**, chain start: computing edges ≈ 2N and P(c) ≈ 1. M is about flat
-  (≈ 38 N^0.04, median about 22 at every N), and f_b ≈ 0.21.
+  (≈ 38 N^0.04, median about 22 at every N). f_b ≈ 0.21 as currently measured
+  (≈ 0.33 without the final resident, the paper's value).
 - **Fig S1**, random walk (to 10⁵): M ~ N^0.93 overall and N^0.99 for N ≥ 10⁴.
   The computing module grows as N^0.83.
 - **Fig S3**, other targets, N_P = 10 (to 10⁴): the exponents are about 1.0.
@@ -72,4 +96,4 @@ As in the paper, the plots show means over runs, with error bars at the 5th and
   levels off near 6×10⁻³, because drift grows the module. Eq. 2 alone no longer
   explains the scaling there.
 - **Fig S5**, chain start, N_P = 10 (to 10⁶): M ~ N^0.23, with a broad spread
-  across runs. P(c) ≈ 1, and P(b|c) ≈ 0.17.
+  across runs. P(c) ≈ 1; P(b|c) ≈ 0.17 as currently measured (see known issue).

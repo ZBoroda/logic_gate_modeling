@@ -633,8 +633,10 @@ def small_pop(outdir, big, exp, exp_big, color, name, letter_titles, paper_notes
     ax.legend(loc='upper left', fontsize=9)
     title(ax, letter_titles[0])
     ax = axs[0, 1]; loglog(ax, ylabel='fixating mutations per run')
-    dots(ax, series(exp, 'fix'), color, label='$N_P = 10$')
-    dots(ax, series(exp_big, 'fix'), INK, label='$N_P = 10^4$', hollow=True, marker='s')
+    rfx = series(exp, 'fix')
+    dots(ax, rfx, color, label='$N_P = 10$')
+    dots(ax, series(exp_big, 'fix', nmax=rfx[-1, 0] if len(rfx) else None), INK,
+         label='$N_P = 10^4$', hollow=True, marker='s')
     dots(ax, series(exp, 'fix_ben'), GREEN, label='$N_P = 10$, beneficial only', marker='D',
          ms=5, bars=False)
     ax.legend(loc='upper left', fontsize=9)

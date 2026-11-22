@@ -74,7 +74,10 @@ then costs O(module) to evaluate.
   - From the chain start a handful of runs carry most of all proposals. There
     the median is primary and the mean is drawn hollow.
 - **Every ratio:** a ratio of sums over runs, with a run-bootstrap CI.
-- **References:** exact theory, not power-law fits.
+- **References:** exact theory, not power-law fits. The few "∝ 1/N" lines are
+  marked as guides.
+- From the chain start the mean has no CI: the tail is too heavy for the
+  bootstrap.
 
-See CHANGES.md for the reasons. `checks.py` tests the data against every
-quantitative claim in the figure titles.
+See CHANGES.md for the reasons. `checks.py` tests the data against the
+quantitative claims in the figure titles.

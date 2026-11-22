@@ -163,14 +163,18 @@ def par_theory(N, Np=1e4):
     t1, t2 = exact_M_parallel_terms(N, Np)
     a, b = 1 + t1 / Np, 1 + t2 / Np                       # residents at each step
     q = (N - 1) / N
-    n_comp = (3 * t1 + 5 * t2) / (2 * N + 1)
-    n_ben = (2 * t1 + q * t2) / (2 * N + 1)
+    # Step 2 (edge 2 -> 1 present): rewiring either input of gate 2 to gate 1 closes a
+    # cycle, so 2 of the (2N+1)N pairs are redrawn: (5N-2) valid computing pairs out of
+    # (2N+1)N-2. Step 1 has no gate-to-gate edge, hence no cycles.
+    D2 = 2 * N + 1 - 2 / N
+    n_comp = 3 * t1 / (2 * N + 1) + (5 - 2 / N) * t2 / D2
+    n_ben = 2 * t1 / (2 * N + 1) + q * t2 / D2
     return dict(M=t1 + t2, t1=t1, t2=t2,
                 # per resident, final included: 7 computing edges, or 5 if the bottleneck
                 # rewiring picks gate 2 itself (probability 1/(N-1))
                 ce=(3 * a + 5 * b + 7 - 2 / (N - 1)) / (a + b + 1),
                 fb=(2 * a + q * b) / (3 * a + 5 * b),        # per edge, final resident excluded
-                pc2=(3 * t1 + 5 * t2) / (t1 + t2),           # (2N+1) P(c), per proposal
+                pc2=(2 * N + 1) * n_comp / (t1 + t2),        # (2N+1) P(c), per proposal
                 pc=n_comp / (t1 + t2), pbc=n_ben / n_comp, pfix=2 / n_ben, pb=2 / (t1 + t2),
                 n_ben=n_ben)
 
@@ -481,8 +485,8 @@ def fig1(outdir):
     ax.text(9.9, 4.0, 'if $f < 1$', fontsize=9, rotation=90, ha='left', va='center')
     poly_arrow(ax, [(7.2, 2.0), (7.2, 0.95)], label='', lpos=None)
     ax.text(7.35, 1.3, 'if $f = 1$', fontsize=9, ha='left', va='center')
-    ax.text(2.45, 5.45, 'a proposal that closes a cycle is redrawn\n(edge and source) and not counted',
-            fontsize=8.2, color=MUTED, va='center')
+    ax.text(2.15, 5.45, 'cyclic proposals are redrawn\n(edge and source), not counted',
+            fontsize=8, color=MUTED, va='center', ha='right')
     ax.text(0.2, -0.3, '$f$: resident fitness. $M$ counts every acyclic proposal, fixed or lost (including neutral '
                        'ones\noutside the computing module); redrawn cyclic proposals are not counted. '
                        '$\\pi(s)$ is the Moran fixation\nprobability for relative fitness $e^{s}$ '
@@ -607,7 +611,7 @@ def fig3(outdir, big):
     ax.axhline(2, color=GREEN, lw=1, ls='--', zorder=0)
     ax.legend(loc='upper left', fontsize=8.8, ncol=2)
     note(ax, 'no deleterious mutation fixes; fixed beneficial = 2 (the two steps)')
-    title(ax, 'C   two beneficial fixations at every $N$; neutral fixations grow as $\\langle M\\rangle/N_P$')
+    title(ax, 'C   beneficial fixations stay ≈ 2; neutral fixations grow as $\\langle M\\rangle/N_P$')
 
     ax = axD; loglog(ax, ylabel='fraction of lost mutations (pooled over runs)')
     for k, c, lab, mk in [('lost_ben', GREEN, 'beneficial', 'D'), ('lost_del', VERM, 'deleterious', 's')]:
@@ -620,7 +624,7 @@ def fig3(outdir, big):
     rd = pooled('par_1e4', 'lost_del', 'lost')
     if len(rd):
         c0 = rd[len(rd) // 2, 1] * rd[len(rd) // 2, 0]
-        curve(ax, (Ns[0], Ns[-1]), lambda n: c0 / n, MUTED, ls='--', lw=1, label='$\\propto 1/N$')
+        curve(ax, (Ns[0], Ns[-1]), lambda n: c0 / n, MUTED, ls='--', lw=1, label='$\\propto 1/N$ (guide)')
     ax.legend(loc='upper right', fontsize=9)
     title(ax, 'D   almost every lost mutation is neutral')
     save(fig, 'fig3_network_size.png', outdir)
@@ -773,7 +777,7 @@ def fig4(outdir, big):
     ax.text(1.0, 4 / 13, ' 4/13', transform=ax.get_yaxis_transform(), fontsize=8.5, color=MUTED, va='center')
     ax.set_ylim(0, 0.8)
     ax.legend(loc='upper left', fontsize=8.8, title='lines: two-step theory', title_fontsize=8.5)
-    note(ax, 'step 1: $f_b$ = (1, 1, 0); step 2: (1, 0, 0, 0, 0)\n'
+    note(ax, 'step 1: $f_b$ = (1, 1, 0); step 2: ($(N-1)/N$, 0, 0, 0, 0)\n'
              'per proposal the long second step dominates: 4/13')
     title(ax, 'C   beneficial fraction is $O(1)$')
 
@@ -792,7 +796,7 @@ def fig4(outdir, big):
         curve(ax, xs, lambda n, k=k: par_theory(n)[k], c, ls='--', lw=1.1, alpha=0.8)
     ax.legend(loc='lower left', fontsize=9, title='dashed: two-step theory', title_fontsize=8.5)
     note(ax, 'sums over runs;\n$\\langle M \\rangle = \\langle$fixed beneficial$\\rangle / P(b)$ exactly',
-         loc=(0.98, 0.45), va='center')
+         loc=(0.98, 0.80), va='top')
     title(ax, 'E   Eq. 2 per proposal: only $P(c)$ depends on $N$')
     save(fig, 'fig4_mechanism.png', outdir)
 
@@ -828,8 +832,8 @@ def fig5(outdir, big):
          label='$P(b\\,|\\,c)$, typical run (median)', offset=0.92)
     ax.set_ylim(0, 1)
     ax.legend(loc='upper right', fontsize=8.8)
-    note(ax, 'per proposal is lower: runs spend most proposals\nat fitness ¾, where few rewirings help',
-         loc=(0.02, 0.03), ha='left')
+    note(ax, 'pooled per proposal is lower: runs spend most proposals\nat fitness ¾, where few rewirings help',
+         loc=(0.02, 0.62), ha='left', va='top')
     title(ax, 'C   beneficial fraction is $O(1)$')
 
     ax = fig.add_subplot(gs[0, 3])
@@ -839,9 +843,10 @@ def fig5(outdir, big):
     ax = fig.add_subplot(gs[1, 1]); loglog(ax, ylabel='total mutations proposed, $M$')
     rm, r = series('chain_1e4', 'M', stat='median'), series('chain_1e4', 'M')
     dots(ax, rm, VERM, label='median (95% CI; thin: 5–95% of runs)', spread=True)
-    dots(ax, r, VERM, label='mean (95% CI)', hollow=True, marker='s', offset=1.12)
+    dots(ax, r, VERM, label='mean (no CI: tail too heavy)', hollow=True, marker='s', offset=1.12, ci=False)
     ax.plot(Ns, [inv_p0_formula(n, n) for n in Ns], color=MUTED, ls='--', lw=1.1,
             label='exact first step $1/p_0$ (Eq. 4, $L = N$)')
+    ax.set_ylim(0.7, 2e3); ax.keep_ylim = True
     ax.legend(loc='upper left', fontsize=9)
     sh = [(N, top_share('chain_1e4', N)) for N in Ns]
     Nx, sx = max(sh, key=lambda t: t[1])
@@ -860,7 +865,7 @@ def fig5(outdir, big):
     if len(rb):
         note(ax, f'beneficial proposals per run: {rb[:, 1].min():.1f}–{rb[:, 1].max():.1f}; '
                  f'fixed: {rf[:, 1].min():.2f}–{rf[:, 1].max():.2f}', loc=(0.98, 0.97), va='top')
-    title(ax, 'F   Eq. 2 per proposal: no factor depends on $N$')
+    title(ax, 'F   Eq. 2 per proposal: every factor stays $O(1)$')
 
     ax = fig.add_subplot(gs[1, 3]); loglog(ax, ylabel='fraction of runs with $M > x$', xlabel='$x$')
     cm = plt.get_cmap('viridis')
@@ -910,7 +915,8 @@ def figS1(outdir, big):
     ax.legend(loc='lower left', fontsize=8.5, ncol=2)
     note(ax, 'without selection the module is a fixed fraction of the network\n'
              'and the beneficial fraction falls instead. $P(c)$ sits below the edge\n'
-             'fraction: rewiring a computing gate closes a cycle more often (redrawn)',
+             'fraction: rewiring a computing gate closes a cycle more often (redrawn).\n'
+             '$N = 10^5$: no $P(c)$, $P(b|c)$ (not rerun with the new counter)',
          loc=(0.02, 0.19), ha='left')
     ax.set_ylim(1e-7, 3); ax.keep_ylim = True
     title(ax, 'B   the factors of Eq. 2 swap roles')
@@ -1010,7 +1016,8 @@ def small_pop(outdir, big, exp, exp_big, color, name, titles, chain_start=False)
     if chain_start:
         dots(ax, series(exp, 'M', stat='median'), color, label='median (95% CI; thin: 5–95% of runs)',
              spread=True)
-        dots(ax, series(exp, 'M'), color, label='mean (95% CI)', hollow=True, marker='s', offset=1.12)
+        dots(ax, series(exp, 'M'), color, label='mean (no CI: tail too heavy)', hollow=True, marker='s',
+             offset=1.12, ci=False)
         ax.plot(Ns, [inv_p0_formula(n, n, 10.0) for n in Ns], color=MUTED, ls='--', lw=1.1,
                 label='exact first step $1/p_0$ (Eq. 4, $L = N$)')
         sh = [(N, top_share(exp, N)) for N in Ns]
@@ -1022,7 +1029,8 @@ def small_pop(outdir, big, exp, exp_big, color, name, titles, chain_start=False)
         curve(ax, xs, lambda n: exact_M_parallel(n, 10.0), MUTED, ls='--', lw=1.1,
               label='exact Eq. 3 at $N_P = 10$ (two-step path, no drift)')
         ratio = r[:, 1] / exact_M_parallel(r[:, 0], 10.0)
-        note(ax, f'simulation / Eq. 3 at $N_P = 10$: {ratio.min():.2f}–{ratio.max():.2f}, flat in $N$\n'
+        note(ax, f'simulation / Eq. 3 at $N_P = 10$: {ratio[0]:.2f} at $N = {int(r[0, 0])}$, then '
+                 f'{ratio[1:].max():.2f} falling slowly to {ratio[-1]:.2f}\n'
                  '(drift scrambles the reservoir and adds detours)')
     ax.legend(loc='upper left', fontsize=9)
     title(ax, titles[0])
@@ -1074,7 +1082,7 @@ def figS4(outdir, big):
 def figS5(outdir, big):
     small_pop(outdir, big, 'chain_10', 'chain_1e4', GREEN, 'figS5_small_population_chain.png',
               ['A   chain start, $N_P = 10$: typical $M$ flat', 'B   fixations: drift adds $\\langle M\\rangle/N_P$',
-               'C   $P(c) \\approx 1$ at $N_P = 10^4$; below 1 and noisy under drift', 'D   $P(b\\,|\\,c)$'], chain_start=True)
+               'C   $P(c) = 1$ in the typical run; pooled below 1 at $N_P = 10$', 'D   $P(b\\,|\\,c)$'], chain_start=True)
 
 
 def figS6(outdir, big):
@@ -1092,11 +1100,12 @@ def figS6(outdir, big):
     ax = axs[1]; loglog(ax, ylabel='time to evolve AND, $T\\,N_P/\\tau$')
     rm = series('chain_1e4', 'Tn', stat='median')
     dots(ax, rm, VERM, label='median (95% CI; thin: 5–95% of runs)', spread=True)
-    dots(ax, series('chain_1e4', 'Tn'), VERM, label='mean (95% CI)', hollow=True, marker='s', offset=1.12)
+    dots(ax, series('chain_1e4', 'Tn'), VERM, label='mean (no CI: tail too heavy)', hollow=True, marker='s',
+         offset=1.12, ci=False)
     if len(rm):
         i = len(rm) // 2
         c0 = rm[i, 1] * rm[i, 0]
-        curve(ax, (rm[0, 0], rm[-1, 0]), lambda n: c0 / n, MUTED, ls='--', lw=1, label='$\\propto 1/N$')
+        curve(ax, (rm[0, 0], rm[-1, 0]), lambda n: c0 / n, MUTED, ls='--', lw=1, label='$\\propto 1/N$ (guide)')
     ax.legend(loc='lower left', fontsize=9)
     title(ax, 'B   chain start: time falls as $1/N$')
     note(axs[0], 'time model (Methods 6.1–6.2): one exponential wait per accepted (acyclic)\n'

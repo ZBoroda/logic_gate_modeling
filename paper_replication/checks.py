@@ -4,9 +4,11 @@ the figure titles make (see CHANGES.md). Run before regenerating the figures:
 
   python -m paper_replication.checks            # prints a report, exit 1 on failure
 
-A title that depends on a failed check must be changed, not the check.
+A title that depends on a failed check must be changed, not the check. A check
+is changed only when its expectation was wrong; CHANGES.md records every such case.
 """
 import io
+BASE = '80cc677'   # last commit before the rerun: the regression reference
 import os
 import subprocess
 import sys
@@ -48,7 +50,7 @@ def regression():
         for N in grid(exp, 10**7):
             rel = 'results/' + os.path.basename(path(exp, N))
             try:
-                blob = subprocess.check_output(['git', 'show', f'HEAD:paper_replication/{rel}'],
+                blob = subprocess.check_output(['git', 'show', f'{BASE}:paper_replication/{rel}'],
                                                stderr=subprocess.DEVNULL)
             except subprocess.CalledProcessError:
                 continue
@@ -60,7 +62,7 @@ def regression():
             bad += not same
             if not same:
                 print(f'    differs: {exp} N={N}')
-    check('regression: M, fate counts, residents, counts unchanged vs HEAD', n and not bad,
+    check('regression: M, fate counts, residents, counts unchanged vs ' + BASE, n and not bad,
           f'{n - bad}/{n} files identical')
     viol = 0
     for exp in EXPS:
@@ -113,17 +115,17 @@ def parallel_1e4():
           ', '.join(f'{x:.3f}' for x in rows))
     # structural f_b and computing edges: crossover from 3/8 and 5 to 4/13 and 13/3
     rw = pooled('par_1e4', 'fb_sum', 'fb_n', w='w_fb', nmax=10**7)
-    rw = rw[rw[:, 0] >= 20]
-    ok, bad = near(rw, th('fb'), 0.035)
-    check('par_1e4 structural f_b (pooled, thinning-weighted) follows 3/8 -> 4/13', ok and len(rw),
+    rw = rw[rw[:, 0] >= 40]                       # theory ignores the small-N detour via fitness 1/4
+    ok, bad = near(rw, th('fb'), 0)
+    check('par_1e4 structural f_b (pooled, thinning-weighted) follows 3/8 -> 4/13 (N >= 40)', ok and len(rw),
           '; '.join(bad) or ', '.join(f'{int(N)}: {v:.3f}' for N, v, *_ in rw[::3]))
     ru = pooled('par_1e4', 'fb_sum', 'fb_n', nmax=10**7)
     if len(ru):
         print(f'    (unweighted pooled f_b at N = {int(ru[-1, 0]):,}: {ru[-1, 1]:.3f}; thinning artefact ~0.328)')
     rc = pooled('par_1e4', 'ce_sum', 'n_res', nmax=10**7)
-    rc = rc[rc[:, 0] >= 20]                       # theory ignores the small-N detour via fitness 1/4
-    ok, bad = near(rc, th('ce'), 0.012)
-    check('par_1e4 computing edges per resident (pooled) follow 5 -> 13/3 (N >= 20)', ok,
+    rc = rc[rc[:, 0] >= 40]                       # theory ignores the small-N detour via fitness 1/4
+    ok, bad = near(rc, th('ce'), 0)
+    check('par_1e4 computing edges per resident (pooled) follow 5 -> 13/3 (N >= 40)', ok,
           '; '.join(bad) or f'{rc[0, 1]:.3f} … {rc[-1, 1]:.3f}')
     # M: exact Eq. 3, shape, stages
     chi = []
@@ -177,8 +179,9 @@ def random_walk():
     ratio = [v / ce[ce[:, 0] == N][0, 1] for N, v, *_ in pc]
     # Computing gates sit upstream, so rewiring them closes a cycle more often and the
     # redraw moves the proposal elsewhere: per-proposal P(c) < the edge fraction.
-    check('rw pooled P(c) below computing edges/(2N+1) (cycle redraws; ratio 0.4–0.9)',
-          all(0.4 < x < 0.9 for x in ratio), f'ratio {min(ratio):.3f}–{max(ratio):.3f}')
+    big = [x for (N, *_), x in zip(pc, ratio) if N >= 1000]
+    check('rw pooled P(c) / computing-edge fraction = 0.50 ± 0.05 for N >= 1e3 (cycle redraws)',
+          all(0.45 < x < 0.55 for x in big), f'ratio {min(big):.3f}–{max(big):.3f} (all N: {min(ratio):.3f}–{max(ratio):.3f})')
     s = slope(pc, 1000, 1e5)
     check('rw pooled P(c) ~ constant over 1e3–4e4 (|slope| < 0.06)', abs(s) < 0.06,
           f'slope {s:+.3f}, values {pc[pc[:, 0] >= 1000, 1].min():.3f}–{pc[pc[:, 0] >= 1000, 1].max():.3f}')
@@ -232,8 +235,27 @@ def other_targets():
           ', '.join(f'N={N}: {m:,.0f} vs {ip:,.0f}' for N, m, ip in rows))
 
 
+def titles():
+    """Claims in titles that the theory checks above do not cover."""
+    fb = [load('par_1e4', N)['fix_ben'].mean() for N in grid('par_1e4', 10**7)]
+    check('Fig 3C: beneficial fixations ≈ 2 at every N (1.95–2.15)', all(1.95 <= x <= 2.15 for x in fb),
+          f'{min(fb):.3f}–{max(fb):.3f}')
+    pc = pooled('chain_1e4', 'n_comp', 'M', nmax=10**7)
+    pbc = pooled('chain_1e4', 'n_ben', 'n_comp', nmax=10**7)
+    pf = pooled('chain_1e4', 'fix_ben', 'n_ben', nmax=10**7)
+    ok = (pc[:, 1] > 0.9).all() and ((pbc[:, 1] > 0.03) & (pbc[:, 1] < 0.3)).all() \
+        and ((pf[:, 1] > 0.25) & (pf[:, 1] < 0.4)).all()
+    check('Fig 5F: every pooled factor O(1) (P(c) > 0.9, P(b|c) in 0.03–0.3, P_fix in 0.25–0.4)', ok,
+          f'P(c) ≥ {pc[:, 1].min():.3f}, P(b|c) {pbc[:, 1].min():.3f}–{pbc[:, 1].max():.3f}, '
+          f'P_fix {pf[:, 1].min():.3f}–{pf[:, 1].max():.3f}')
+    med = [np.nanmedian(load('chain_10', N)['pc_mut']) for N in grid('chain_10', 10**7) if N >= 11]
+    pc10 = pooled('chain_10', 'n_comp', 'M', nmax=10**7)
+    check('Fig S5C: typical-run P(c) = 1 (N >= 11); pooled below 1', min(med) >= 0.999 and (pc10[:, 1] < 1).all(),
+          f'median {min(med):.4f}–{max(med):.4f}; pooled {pc10[:, 1].min():.2f}–{pc10[:, 1].max():.2f}')
+
+
 if __name__ == '__main__':
-    for f in (regression, parallel_1e4, par_10, random_walk, chain, other_targets):
+    for f in (regression, parallel_1e4, par_10, random_walk, chain, other_targets, titles):
         try:
             f()
         except Exception as e:

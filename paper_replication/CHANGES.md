@@ -11,8 +11,10 @@ Sources:
 - **Independent review:** five reviews of the figures plus an adversarial review
   of the reviews.
 
-Every quantitative claim in a figure title is checked against the data by
-`checks.py`. Its output is summarised at the end of this file.
+The quantitative claims in the figure titles are checked against the data by
+`checks.py` (29 checks). Its output is summarised in section 4. The notes inside
+panels were verified by hand and by the final adversarial review; they are not
+all automated.
 
 ## 1. Changes that apply to every figure
 
@@ -44,9 +46,12 @@ Every quantitative claim in a figure title is checked against the data by
   network is included.
 - f_b differs from the per-proposal P(b|c):
   - parallel start: 3/8 against 4/13;
-  - chain start: about 0.5 against about 0.3.
+  - chain start: f_b ≈ 0.31–0.32 for N ≥ 10³ (0.46 at N = 5) against pooled
+    P(b|c) ≈ 0.05–0.23 (about 0.12 at large N). The typical run's P(b|c) is
+    0.25–0.40.
 - The reason is that runs spend most of their proposals in residents where few
-  rewirings help. It is not the weighting of edges: from the chain start the
+  rewirings help (from the chain start, 77–87% of proposals are made at fitness
+  ¾). It is not the weighting of edges: from the chain start the
   edge-weighting effect is below 1% for N ≥ 200 (adversarial review).
 - f_b is measured on about 30 residents per run (cost control). Pooling over
   runs therefore re-weights each run by max(1, residents/30). Without this the
@@ -57,7 +62,7 @@ Every quantitative claim in a figure title is checked against the data by
   CI.
   - The exact theory predicts pooled values.
   - Per-run means of ratios are biased. From the parallel start the per-run
-    means are P(b|c) ≈ 0.40 and (2N+1)P(c) ≈ 4.77, against the exact 4/13 and
+    means (N ≥ 10⁴) are P(b|c) ≈ 0.40 and (2N+1)P(c) ≈ 4.88, against the exact 4/13 and
     13/3.
 - **Counts:** means with a bootstrap CI (thick bar). On M a thin bar also shows
   the paper's 5–95% spread across runs, which is spread, not uncertainty.
@@ -76,8 +81,9 @@ Every quantitative claim in a figure title is checked against the data by
     the variance is infinite and the sample mean is unstable.
 - **Sub-linear exponents.** The paper's exponents of 0.8–0.96 for M are
   pre-asymptotic curvature. The exact ⟨M⟩ fitted on the paper's N range gives
-  0.95, and its slope tends to 1. In every experiment M/N levels off for
-  N ≳ 10³.
+  0.95, and its slope tends to 1. From the parallel start (all N_P, and the
+  random walk) M/N levels off for N ≳ 10³; from the chain start M itself is
+  flat.
 - **"(not in paper)" tags are removed from the panels.** The new panels are
   listed here instead.
 
@@ -123,9 +129,12 @@ Every quantitative claim in a figure title is checked against the data by
   - Mutations are now split by type: lost neutral, fixed neutral, beneficial
     proposed, beneficial fixed, lost deleterious.
   - The paper's "fixating mutations do not depend on N" holds only for
-    N ≪ N_P. Neutral fixations equal ⟨M⟩/N_P (766 at N = 10⁶) and dominate
-    above N ≈ 10⁴.
-  - What stays fixed is the number of beneficial fixations, exactly 2.
+    N ≪ N_P. Neutral fixations equal ⟨M⟩/N_P (766 at N = 10⁶) and outnumber
+    the beneficial ones above N ≈ 2.6·10³.
+  - What stays fixed is the number of beneficial fixations: 2.000–2.006 for
+    N ≥ 400, 2.12 at N = 5 (small-N detours via fitness ¼).
+- **3D and S6B:** the "∝ 1/N" lines are guides anchored on a data point, marked
+  "(guide)"; they are not theory.
 - **3D:**
   - Loss fractions are pooled over runs. The per-run fraction silently dropped
     runs with no losses.
@@ -146,11 +155,19 @@ Every quantitative claim in a figure title is checked against the data by
     per-resident value goes from 5 to 13/3, because neutral fixations
     (≈ ⟨M⟩/N_P) make the resident average time-weighted at large N.
   - Also shown: the per-proposal (2N+1)·P(c), which tends to 13/3.
+  - The per-proposal theory includes the cycle-redraw rule: in the step-2 state
+    rewiring either input of gate 2 to gate 1 closes a cycle, leaving 5N − 2
+    valid computing pairs out of (2N+1)N − 2. Without this the curve misses the
+    data at N = 5 and 10 (4.275 against the measured 4.161, CI 4.11–4.22; corrected: 4.131).
+  - Two-step theory ignores the small-N detour through fitness ¼, so per
+    resident it misses the data by up to 1.3% (computing edges) and 2.2% (f_b)
+    at N ≤ 20. The checks start at N = 40.
 - **4C:**
   - Structural f_b against the per-proposal P(b|c), both with two-step theory.
   - f_b goes from 3/8 to 4/13, so it is **not** independent of N over the
     extension. P(b|c) is 4/13.
-  - The paper's 0.37 is 3/8 exactly.
+  - The paper's 0.37 is the plateau near 3/8 (two-step theory peaks at 0.371,
+    the data at 0.373).
 - **4D:** the invented schematic is replaced by an exact enumeration of every
   neighbour of the bottleneck state (N = 6), with true fitness colours and the
   beneficial neighbours marked.
@@ -170,12 +187,16 @@ Every quantitative claim in a figure title is checked against the data by
 - **5E:**
   - The median is the primary statistic, about 22 at every N ≥ 21 and 17 at
     N ≤ 11.
-  - The mean is shown with its bootstrap CI, which is wide.
+  - The mean is shown without a CI. The tail has Hill α ≈ 1.0–1.3, so the
+    bootstrap of the mean is not valid (the mean is barely defined). Same in
+    S5A and S6B.
   - The exact first step 1/p₀ (Eq. 4 with L = N, → 5.34) is drawn.
   - The power-law fit to the mean is dropped. The longest 1% of runs can hold up
     to 69% of all proposals at one N.
   - The paper's "N ≤ 601" range is N ≤ 401 on our grid.
-- **5F:** the Eq. 2 factors per proposal (pooled) for the chain.
+- **5F:** the Eq. 2 factors per proposal (pooled) for the chain. All stay O(1):
+  P(c) ≥ 0.97, P_fix 0.29–0.31; P(b|c) falls from 0.23 at N ≤ 11 to 0.05–0.15
+  for N ≥ 200 and then stays level.
 - **5G (new):** the distribution of M for N = 5 to 10⁶. It collapses for
   N ≳ 10², with a ~1/x tail, in contrast to the parallel start, whose
   distribution shifts with N.
@@ -191,8 +212,8 @@ Every quantitative claim in a figure title is checked against the data by
   - Without selection, P(c) levels off at about 0.06 per proposal (slope
     −0.05 over N = 10³–4·10⁴): the module is a fixed fraction of the network.
   - The computing-edge fraction itself is about 0.12. P(c) is about half of
-    that because computing gates sit upstream: rewiring one closes a cycle 2–3×
-    more often than rewiring another edge, and the redraw moves the proposal
+    that because computing gates sit upstream: in random-walk networks about 60% of
+    draws on computing edges close a cycle against about 10% on other edges, and the redraw moves the proposal
     elsewhere (checked directly on evolved random-walk networks).
   - P(b|c) falls as 1/N. Eq. 2's factors swap roles compared with selection.
 
@@ -219,8 +240,8 @@ Every quantitative claim in a figure title is checked against the data by
 
 ### Fig S4 / S5 (N_P = 10)
 - **A:**
-  - Parallel start: exact Eq. 3 at N_P = 10 is overlaid. The data sit 1.33–1.68×
-    above it, roughly independent of N. This is drift: detours through fitness
+  - Parallel start: exact Eq. 3 at N_P = 10 is overlaid. The data sit 1.68×
+    above it at N = 5, then 1.54× falling slowly to 1.33× at N = 10⁵. This is drift: detours through fitness
     ¼ and ¾, and a scrambled reservoir. The slope is the same.
   - Chain start: the median is primary. The longest 1% of runs carry up to 91%
     of all proposals. The paper's N^0.10 fit (our N^0.20 on the mean) is noise.
@@ -228,7 +249,7 @@ Every quantitative claim in a figure title is checked against the data by
 - **B:** fixations are split into neutral, beneficial and deleterious, against
   ⟨M⟩/N_P. At N_P = 10 the total is ≈ ⟨M⟩/N_P, so it is not an independent
   result.
-- **C/D:**
+- **C/D, parallel start (S4):**
   - Per-proposal P(c) and P(b|c), pooled and for the typical run (median), with
     N_P = 10⁴ for comparison and structural f_b as light markers.
   - At N_P = 10, pooled P(c) levels off for N ≥ 10³: about 0.02 averaged over
@@ -237,6 +258,11 @@ Every quantitative claim in a figure title is checked against the data by
     P(c) > 10/N). The typical run's P(c) keeps falling as 1/N (slope
     −1.00 ± 0.01).
   - Pooled P(b|c) at N_P = 10 then falls as 1/N, as in the random walk.
+- **C/D, chain start (S5):**
+  - The typical run's P(c) is exactly 1 at every N ≥ 11. Pooled P(c) is
+    0.54–0.99 and noisy: it is set by the few long runs in which drift breaks
+    the chain.
+  - Pooled P(b|c) falls slowly (slope −0.26), not as 1/N.
 
 ### Fig S6 (time)
 - **No random draw.** The Gamma-sampled T is replaced by the exact conditional
@@ -261,11 +287,11 @@ error inflated by √(χ²/dof).
 | parallel, N_P = 10⁴, mean M | 5 – 10⁶ | 0.987 ± 0.004 | — |
 | parallel, N_P = 10⁴, mean M | 10⁴ – 10⁶ | 1.005 ± 0.006 | — |
 | chain, N_P = 10⁴, median M | 21 – 10⁶ | 0.007 ± 0.004 | — |
-| chain, N_P = 10⁴, mean M | 21 – 10⁶ | 0.033 ± 0.011 | — |
+| chain, N_P = 10⁴, mean M | 21 – 10⁶ | 0.03 (no valid error) | — |
 | parallel, N_P = 10, mean M | 5 – 10⁵ | 0.970 ± 0.009 | — |
 | chain, N_P = 10, median M | 21 – 10⁶ | 0.008 ± 0.005 | — |
-| chain, N_P = 10, mean M | 21 – 10⁶ | 0.197 ± 0.022 | 0.10 |
-| random walk, mean M | 5 – 4·10⁴ | 0.930 ± 0.011 | — |
+| chain, N_P = 10, mean M | 21 – 10⁶ | 0.20 (no valid error) | 0.10 |
+| random walk, mean M | 5 – 10⁵ | 0.930 ± 0.011 | — |
 | I₁∧¬I₂ / OR / TRUE, N_P = 10, mean M | 5 – 10⁴ | 0.896 ± 0.023 / 0.923 ± 0.016 / 0.946 ± 0.009 | — |
 | parallel, N_P = 10, pooled P(c) | 10³ – 10⁵ | −0.088 ± 0.031 | — |
 | parallel, N_P = 10, typical-run P(c) | 10³ – 10⁵ | −1.002 ± 0.009 | — |
@@ -278,10 +304,11 @@ the random walk are fits over curved data that the exact theory does not cover.
 
 ## 4. Checks against theory (`python -m paper_replication.checks`)
 
-**26/26 pass** on the rerun. Highlights:
+**29/29 pass** on the rerun. Highlights:
 
 - **Regression:** M, fate counts, resident counts and per-level counts are
-  bit-identical to the previous results in all 112 files that exist in both.
+  bit-identical to the results at commit 80cc677 (before the rerun) in all 112
+  files that exist in both.
 - **Parallel start, N_P = 10⁴:**
   - ⟨M⟩ against exact Eq. 3: χ²/dof = 0.98 over 17 sizes.
   - Both Eq. 3 terms (first and second step) within 2.6 SEM at every N.
@@ -297,7 +324,11 @@ the random walk are fits over curved data that the exact theory does not cover.
 - **Parallel start, N_P = 10:** typical-run N·P(c) flat (2.8–3.1); pooled P(c)
   flat (slope −0.08); pooled P(b|c) slope −0.92; N·P(c)P(b|c) = 0.72–0.79.
 - **Random walk:** pooled P(c) flat at 0.058–0.069 (slope −0.05) and 0.49–0.86
-  of the computing-edge fraction; pooled P(b|c) slope −0.91.
+  of the computing-edge fraction (0.49–0.51 for N ≥ 10³); pooled P(b|c) slope
+  −0.91 (N·P(b|c) rises from 34 to 47, so the approach to 1/N is slow).
+- **Title claims:** beneficial fixations 2.00–2.12 (Fig. 3C); chain pooled
+  P(c) ≥ 0.97, P(b|c) 0.05–0.23, P_fix 0.29–0.31 (Fig. 5F); chain at N_P = 10
+  typical-run P(c) = 1.000, pooled 0.54–0.99 (Fig. S5C).
 - **Chain start, N_P = 10⁴:** median M 20–24 for N ≥ 21; median slope
   over 10⁴–10⁶ has 95% CI [−0.023, +0.014]; tail x·P(M > x) = 5.0–5.8 for
   x = 200–5000; the distributions at N = 1001 and 10⁶ agree (KS p = 0.57).
@@ -307,8 +338,15 @@ the random walk are fits over curved data that the exact theory does not cover.
 Two random-walk checks were written from the review's predictions
 (P(c) ≈ computing-edge fraction ≈ 0.12, N·P(b|c) ≈ 15–30) and failed on the
 data (ratio 0.49–0.86; N·P(b|c) 34–47). The cycle-redraw mechanism above
-explains the first. The checks were corrected to the measured behaviour; no
-figure title depended on the predicted numbers.
+explains the first. Both checks were changed after they failed, which breaks
+the module's own rule; we record it here. The P(c) check now tests the measured
+ratio, 0.50 ± 0.05 for N ≥ 10³. The P(b|c) check keeps the slope and drops the
+prefactor bound. No figure title depended on the predicted numbers.
+
+The final adversarial review also found that the regression check compared
+against HEAD, which after the commit was the rerun itself; it is now pinned to
+80cc677. The f_b and computing-edge checks had widened their CIs by 3.5% and
+1.2%; they now use the plain CI from N = 40.
 
 ## 5. Not done
 - I₁∧¬I₂, OR and TRUE at N_P = 10⁴, which would test whether the frozen-start

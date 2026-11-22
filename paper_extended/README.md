@@ -10,13 +10,19 @@ For the corrected and re-analysed version of these figures, see
 `paper_replication/` and its `CHANGES.md`.
 
 ```
-python -m paper_extended.figures                    # -> figs/, fits.md
+python -m paper_extended.figures                    # -> figs_1e4/, figs_1e6/, fits_1e4.md, fits_1e6.md
+python -m paper_extended.figures 1e4                # one set only
 python -m paper_extended.crop_panels paper.pdf      # -> panels/ (already done)
 ```
 
+| folder | contents |
+|---|---|
+| `figs_1e4/` | N ≤ 10⁴ (the paper's range, extended tenfold); caption numbers in `fits_1e4.md` |
+| `figs_1e6/` | every simulated N (N_P = 10⁴ up to 10⁶); caption numbers in `fits_1e6.md` |
+
 ## What is extended
 
-| figure | redrawn from new data | kept from the paper | N range (paper: 5 – 10³) |
+| figure | redrawn from new data | kept from the paper | N range in `figs_1e6` (paper: 5 – 10³) |
 |---|---|---|---|
 | 3 | B, C, D | A | 5 – 10⁶ |
 | 4 | B, C | A, D | 5 – 10⁶ |
@@ -42,8 +48,8 @@ Figs 1 and 2 have no plot over network size and are not included.
   - time (S6) follows Methods 6.1.
 - **Fits:** red lines are y = A x^b by least squares on log(mean) against log N,
   over all points unless the caption says otherwise. The caption numbers
-  (subset fits, brackets) are recomputed the same way in **`fits.md`**, next to
-  the paper's values. "Non-overlapping subsets" are contiguous halves or thirds of
+  (subset fits, brackets) are recomputed the same way in **`fits_1e4.md`** and
+  **`fits_1e6.md`**, next to the paper's values. "Non-overlapping subsets" are contiguous halves or thirds of
   the extended N grid.
 - **Layout and labels** follow the paper (MATLAB-style axes and colours).
 

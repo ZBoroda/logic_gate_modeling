@@ -909,7 +909,10 @@ def figS1(outdir, big):
     dots(ax, rp, GREY, marker='.', ms=7, ci=False, label='random walk: computing edges / $(2N+1)$')
     ax.legend(loc='lower left', fontsize=8.5, ncol=2)
     note(ax, 'without selection the module is a fixed fraction of the network\n'
-             'and the beneficial fraction falls instead', loc=(0.98, 0.97), va='top')
+             'and the beneficial fraction falls instead. $P(c)$ sits below the edge\n'
+             'fraction: rewiring a computing gate closes a cycle more often (redrawn)',
+         loc=(0.02, 0.19), ha='left')
+    ax.set_ylim(1e-7, 3); ax.keep_ylim = True
     title(ax, 'B   the factors of Eq. 2 swap roles')
     save(fig, 'figS1_random_walk.png', outdir)
 
@@ -1071,7 +1074,7 @@ def figS4(outdir, big):
 def figS5(outdir, big):
     small_pop(outdir, big, 'chain_10', 'chain_1e4', GREEN, 'figS5_small_population_chain.png',
               ['A   chain start, $N_P = 10$: typical $M$ flat', 'B   fixations: drift adds $\\langle M\\rangle/N_P$',
-               'C   $P(c) \\approx 1$', 'D   $P(b\\,|\\,c)$'], chain_start=True)
+               'C   $P(c) \\approx 1$ at $N_P = 10^4$; below 1 and noisy under drift', 'D   $P(b\\,|\\,c)$'], chain_start=True)
 
 
 def figS6(outdir, big):

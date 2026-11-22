@@ -202,20 +202,26 @@ all automated.
   distribution shifts with N.
 
 ### Fig S1 (random walk)
-- **A:** shown as M/N, with selection (exact Eq. 3) for comparison.
+- **A:** shown as M/N, with selection (exact Eq. 3) for comparison. M/N
+  levels off at 4.7–5.2 for N ≥ 10³ (exponent 0.97 ± 0.02 over 10³–10⁵).
   - The random walk needs about 0.63× as many proposals as selection for
     N ≥ 10³.
   - The comparison is in proposals, not time.
   - The exact theory does not cover the random walk, which also steps down in
     fitness.
 - **B, which was "module grows as N^0.83":** replaced by pooled P(c) and P(b|c).
-  - Without selection, P(c) levels off at about 0.06 per proposal (slope
-    −0.04 over N = 10³–10⁵): the module is a fixed fraction of the network.
+  - Without selection, P(c) is nearly constant, falling slowly from 0.069 to
+    0.059 per proposal over N = 10³–10⁵ (slope −0.040 ± 0.009). The module stays
+    close to a fixed fraction of the network.
   - The computing-edge fraction itself is about 0.12. P(c) is about half of
     that because computing gates sit upstream: in random-walk networks about 60% of
     draws on computing edges close a cycle against about 10% on other edges, and the redraw moves the proposal
-    elsewhere (checked directly on evolved random-walk networks).
-  - P(b|c) falls as 1/N. Eq. 2's factors swap roles compared with selection.
+    elsewhere. `rw_cycle.py` shows the mechanism on single random-walk networks
+    (acyclic share 0.18–0.54 on computing edges against 0.85–0.99 on others). It
+    does not predict the factor 0.5 itself, which varies 0.2–0.7 between single
+    networks; the 0.50 ± 0.05 check band is descriptive, set from the data.
+  - P(b|c) approaches 1/N asymptotically: N·P(b|c) rises from 34 to 47 and is
+    flat only from N = 2·10⁴. Eq. 2's factors swap roles compared with selection.
 
 ### Fig S2 (distributions, parallel start)
 - **A/B:** the exact distribution, a sum of two geometric waits with the Eq. 3
@@ -230,26 +236,41 @@ all automated.
   each title: ½, ½ and ¾.
 - **New: the same targets at N_P = 10⁴** (`andnot_1e4`, `or_1e4`, `true_1e4`, 500
   runs, N = 5 – 10⁵).
-- **From the parallel NAND start, frozen-genotype theory does not describe these
-  runs:**
-  - OR and TRUE have no beneficial single mutation (p₀ = 0).
-  - For I₁∧¬I₂, one rewiring in N(2N+1) is beneficial, so 1/p₀ ∝ N² (83,409 at
-    N = 100 for N_P = 10, against an observed ⟨M⟩ of 3,955). At N_P = 10⁴ the
-    direct step is faster than the observed ⟨M⟩ only below N ≈ 300.
-- **At N_P = 10⁴, every target is reached through neutral fixations:**
-  - Neutral fixations = ⟨M⟩/N_P within 5% for N ≥ 10³ (1.00 at N = 10⁵); no
-    deleterious mutation fixes in any run.
-  - For N ≥ 10³ the slopes are 0.96 ± 0.02 (I₁∧¬I₂), 0.99 ± 0.01 (OR) and
-    1.00 ± 0.01 (TRUE); M/N = 855, 1,660 and 1,566 at N = 10⁵, i.e.
-    0.09–0.17 N_P.
-  - M is 24–510× larger than at N_P = 10: with strong selection the runs wait
-    for rare neutral fixations (probability 1/N_P per proposal) instead of
-    drifting.
-  - From I₁∧¬I₂ at small N, the first step to fitness ¾ comes quickly and
-    92–99.9% of proposals (N ≤ 100) are spent at ¾; at large N most are spent
-    at ½ (61% at N = 10⁴).
-- So the paper's "linear scaling for other targets" holds at both N_P, but
-  through drift, not through the frozen-start mechanism of Eq. 2.
+- **From the parallel NAND start:**
+  - OR and TRUE have no beneficial single mutation (p₀ = 0). No deleterious
+    mutation fixes in any run either, so every run must fix at least one neutral
+    mutation before it can improve.
+  - For I₁∧¬I₂, one rewiring in N(2N+1) is beneficial, so 1/p₀ ∝ N². The
+    frozen start predicts only the first step (½ → ¾). The figure compares it
+    with the proposals made at fitness ½ (hollow diamonds), not with M.
+  - At N_P = 10⁴ that first step matches the frozen start exactly for small N:
+    247 and 961 proposals against 1/p₀ = 249 and 949 at N = 5 and 10. It then
+    falls below it: 0.90, 0.80, 0.46, 0.26 and 0.14 × 1/p₀ at N = 20, 40, 100,
+    200 and 400. That is the drift signature: neutral changes open new routes to ¾
+    faster than the single frozen-start rewiring.
+  - At N_P = 10, ⟨M⟩ for the whole path is already far below 1/p₀ (3,955
+    against 83,409 at N = 100).
+- **The step to fitness 1 dominates at small N, the first step at large N**
+  (I₁∧¬I₂, N_P = 10⁴): 92–99.9% of proposals are made at ¾ for N ≤ 100, and 61%
+  at ½ by N = 10⁴.
+- **Neutral fixations = ⟨M⟩/N_P (within 1% for N ≥ 10³) is an identity**, not
+  evidence: π(0) = 1/N_P exactly, so the ratio is just the share of proposals that
+  are neutral. The AND runs (par_1e4) show the same ratio while following the
+  frozen two-step Eq. 3. It is printed by checks.py, not checked.
+- **Scaling at N_P = 10⁴:**
+  - M is roughly linear only at large N. The slopes are 0.96 ± 0.02 (I₁∧¬I₂),
+    0.99 ± 0.01 (OR) and 1.00 ± 0.01 (TRUE) for N = 10³–10⁵. Over all N they are
+    0.58, 0.91 and 0.93.
+  - For I₁∧¬I₂, M/N falls from 57,610 at N = 5 to 855 at N = 10⁵, and the
+    slope over 10³–10⁴ alone is 0.89. OR and TRUE are near-linear from N ≈ 100.
+  - M/N = 855, 1,660 and 1,566 at N = 10⁵, i.e. 0.09–0.17 N_P.
+  - M is 24–510× larger than at N_P = 10. Both populations need neutral steps,
+    but at N_P = 10 the runs fix 12–41× more neutral mutations per run for
+    N ≥ 10³ (2–5× at N = 5), and deleterious ones too.
+- So the paper's "linear scaling for other targets" holds asymptotically at
+  both N_P. At N_P = 10⁴ it is reached through neutral fixations, not through
+  the frozen-start mechanism of Eq. 2, except for the first step of I₁∧¬I₂ at
+  N ≤ 10.
 
 ### Fig S4 / S5 (N_P = 10)
 - **A:**
@@ -330,9 +351,10 @@ the random walk are fits over curved data that the exact theory does not cover.
   - Pooled, N ≥ 10⁴: (2N+1)P(c) = 4.338 (13/3), P(b|c) = 0.313 (4/13),
     P_fix = 0.384 (π(½) = 0.393).
   - Fixed beneficial 2.000–2.006; beneficial proposals 4.9–5.3 (2/π(½) = 5.08);
-    no deleterious fixation; neutral fixations / (⟨M⟩/N_P) = 0.99–1.00.
-  - Structural f_b falls from 0.371 to 0.311 (3/8 → 4/13); computing edges per
-    resident from 4.94 to 4.32 (5 → 13/3).
+    no deleterious fixation. Neutral fixations / (⟨M⟩/N_P) = 0.99–1.00 is printed
+    only: it is an identity (π(0) = 1/N_P).
+  - Structural f_b falls from 0.372 (N = 40) to 0.303 (N = 4·10⁵) (3/8 → 4/13); computing edges per
+    resident from 4.97 (N = 40) to 4.32 (5 → 13/3).
   - The rejected per-run estimator gives P(b|c) = 0.40, not 4/13, as predicted.
 - **Parallel start, N_P = 10:** typical-run N·P(c) flat (2.8–3.1); pooled P(c)
   flat (slope −0.08); pooled P(b|c) slope −0.92; N·P(c)P(b|c) = 0.72–0.79.
@@ -345,8 +367,11 @@ the random walk are fits over curved data that the exact theory does not cover.
 - **Chain start, N_P = 10⁴:** median M 20–24 for N ≥ 21; median slope
   over 10⁴–10⁶ has 95% CI [−0.023, +0.014]; tail x·P(M > x) = 5.0–5.8 for
   x = 200–5000; the distributions at N = 1001 and 10⁶ agree (KS p = 0.57).
-- **I₁∧¬I₂:** ⟨M⟩ is far below the frozen-start 1/p₀ (e.g. 3,955 against
-  83,409 at N = 100).
+- **I₁∧¬I₂:** at N_P = 10, ⟨M⟩ is far below the frozen-start 1/p₀ (e.g. 3,955
+  against 83,409 at N = 100). At N_P = 10⁴ the first step equals 1/p₀ within
+  5% for N ≤ 10 and is below 0.5 × 1/p₀ for N ≥ 100.
+- **Other targets, N_P = 10⁴:** no deleterious fixation, at least one neutral
+  fixation in every run, slope 0.96–1.00 for N ≥ 10³.
 
 Two random-walk checks were written from the review's predictions
 (P(c) ≈ computing-edge fraction ≈ 0.12, N·P(b|c) ≈ 15–30) and failed on the
@@ -360,6 +385,15 @@ The final adversarial review also found that the regression check compared
 against HEAD, which after the commit was the rerun itself; it is now pinned to
 80cc677. The f_b and computing-edge checks had widened their CIs by 3.5% and
 1.2%; they now use the plain CI from N = 40.
+
+The third adversarial review found that the remaining theory checks still
+widened their CIs (2–6%). Every theory-vs-CI check now uses the plain 95% CI and
+allows as many misses as chance explains: no more than a Binomial(n, 0.05) count
+exceeds with p < 0.01 (2 of 7 rows, 3 of 10). Two rows miss in total (P_fix at
+N = 10⁴; beneficial proposals at N = 10⁴). The same review found that the S3
+check "neutral fixations = ⟨M⟩/N_P" (and its par_1e4 twin) was an identity; both
+are now printed, not checked. They are replaced by the first-step comparison
+against 1/p₀ and by "a neutral fixation in every run". The count stays at 32.
 
 ## 5. Not done
 - Splitting n_comp and n_ben by fitness level, which would test Eq. 2 step by

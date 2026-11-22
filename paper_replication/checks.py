@@ -33,14 +33,17 @@ def slope(r, lo, hi):
     return np.polyfit(np.log(r[m, 0]), np.log(r[m, 1]), 1)[0] if m.sum() >= 3 else np.nan
 
 
-def near(r, theory, rel):
-    """Every row: theory inside the CI widened by rel (relative)."""
+def near(r, theory):
+    """Theory against the plain 95% CI of every row. With n rows, ~5% miss by chance:
+    pass if the misses are no more than a Binomial(n, 0.05) count exceeds with p < 0.01."""
+    from scipy.stats import binom
     bad = []
     for N, v, _, _, lo, hi, _ in r:
         t = theory(N)
-        if not (lo * (1 - rel) <= t <= hi * (1 + rel)):
+        if not (lo <= t <= hi):
             bad.append(f'N={int(N)}: {v:.4g} [{lo:.4g}, {hi:.4g}] vs {t:.4g}')
-    return not bad, bad
+    k = int(binom.ppf(0.99, len(r), 0.05))
+    return len(bad) <= k, (bad + [f'{len(bad)} of {len(r)} outside (≤ {k} allowed)']) if bad else []
 
 
 def regression():
@@ -76,15 +79,15 @@ def regression():
 def parallel_1e4():
     th = lambda k: (lambda N: float(par_theory(N)[k]))
     big = lambda r: r[r[:, 0] >= 10**4]
-    for lab, args, k, rel in [('(2N+1) P(c) -> 13/3', ('n_comp', 'M'), 'pc2', 0.02),
-                              ('P(b|c) -> 4/13', ('n_ben', 'n_comp'), 'pbc', 0.03),
-                              ('P_fix -> pi(1/2)', ('fix_ben', 'n_ben'), 'pfix', 0.03)]:
+    for lab, args, k in [('(2N+1) P(c) -> 13/3', ('n_comp', 'M'), 'pc2'),
+                         ('P(b|c) -> 4/13', ('n_ben', 'n_comp'), 'pbc'),
+                         ('P_fix -> pi(1/2)', ('fix_ben', 'n_ben'), 'pfix')]:
         r = pooled('par_1e4', *args, nmax=10**7,
                    scale=(lambda n: 2 * n + 1) if k == 'pc2' else None)
         if not len(big(r)):
             check(f'par_1e4 pooled {lab} (N >= 1e4)', False, 'no data with n_comp')
             continue
-        ok, bad = near(big(r), th(k), rel)
+        ok, bad = near(big(r), th(k))
         check(f'par_1e4 pooled {lab} (N >= 1e4)', ok and len(big(r)),
               f'{len(big(r))} N; ' + ('; '.join(bad) if bad else
                                       f'e.g. {big(r)[-1, 1]:.4f} vs {th(k)(big(r)[-1, 0]):.4f}'))
@@ -101,7 +104,7 @@ def parallel_1e4():
           f'{m[:, 1].min():.3f}–{m[:, 1].max():.3f}')
     nb = series('par_1e4', 'n_ben', nmax=10**7)
     m = nb[nb[:, 0] >= 1000]
-    ok, bad = near(m, th('n_ben'), 0.06)
+    ok, bad = near(m, th('n_ben'))
     check('par_1e4 beneficial proposals match theory (N >= 1e3)', ok, '; '.join(bad) or
           f'{m[:, 1].min():.2f}–{m[:, 1].max():.2f} (2/pi(1/2) = {2 / PI_H:.2f})')
     fd = sum(load('par_1e4', N)['fix_del'].sum() for N in grid('par_1e4', 10**7))
@@ -111,12 +114,13 @@ def parallel_1e4():
         if N >= 10**4:
             d = load('par_1e4', N)
             rows.append(d['fix_neu'].mean() / (d['M'].mean() / 1e4))
-    check('par_1e4 neutral fixations = <M>/N_P (N >= 1e4)', all(0.95 <= x <= 1.05 for x in rows),
-          ', '.join(f'{x:.3f}' for x in rows))
+    # pi(0) = 1/N_P exactly, so this restates the neutral share of proposals: printed only
+    print('    (par_1e4 neutral fixations / (<M>/N_P), N >= 1e4: '
+          + ', '.join(f'{x:.3f}' for x in rows) + '; identity)')
     # structural f_b and computing edges: crossover from 3/8 and 5 to 4/13 and 13/3
     rw = pooled('par_1e4', 'fb_sum', 'fb_n', w='w_fb', nmax=10**7)
     rw = rw[rw[:, 0] >= 40]                       # theory ignores the small-N detour via fitness 1/4
-    ok, bad = near(rw, th('fb'), 0)
+    ok, bad = near(rw, th('fb'))
     check('par_1e4 structural f_b (pooled, thinning-weighted) follows 3/8 -> 4/13 (N >= 40)', ok and len(rw),
           '; '.join(bad) or ', '.join(f'{int(N)}: {v:.3f}' for N, v, *_ in rw[::3]))
     ru = pooled('par_1e4', 'fb_sum', 'fb_n', nmax=10**7)
@@ -124,7 +128,7 @@ def parallel_1e4():
         print(f'    (unweighted pooled f_b at N = {int(ru[-1, 0]):,}: {ru[-1, 1]:.3f}; thinning artefact ~0.328)')
     rc = pooled('par_1e4', 'ce_sum', 'n_res', nmax=10**7)
     rc = rc[rc[:, 0] >= 40]                       # theory ignores the small-N detour via fitness 1/4
-    ok, bad = near(rc, th('ce'), 0)
+    ok, bad = near(rc, th('ce'))
     check('par_1e4 computing edges per resident (pooled) follow 5 -> 13/3 (N >= 40)', ok,
           '; '.join(bad) or f'{rc[0, 1]:.3f} … {rc[-1, 1]:.3f}')
     # M: exact Eq. 3, shape, stages
@@ -183,7 +187,7 @@ def random_walk():
     check('rw pooled P(c) / computing-edge fraction = 0.50 ± 0.05 for N >= 1e3 (cycle redraws)',
           all(0.45 < x < 0.55 for x in big), f'ratio {min(big):.3f}–{max(big):.3f} (all N: {min(ratio):.3f}–{max(ratio):.3f})')
     s = slope(pc, 1000, 1e5)
-    check('rw pooled P(c) ~ constant over 1e3–1e5 (|slope| < 0.06)', abs(s) < 0.06,
+    check('rw pooled P(c) nearly constant over 1e3–1e5 (|slope| < 0.06)', abs(s) < 0.06,
           f'slope {s:+.3f}, values {pc[pc[:, 0] >= 1000, 1].min():.3f}–{pc[pc[:, 0] >= 1000, 1].max():.3f}')
     pb = pooled('rw', 'n_ben', 'n_comp', nmax=10**7, scale=lambda n: n)
     m = pb[pb[:, 0] >= 1000]
@@ -233,8 +237,20 @@ def other_targets():
         rows.append((N, d['M'].mean(), ip))
     check('I1 AND NOT I2: <M> < frozen-start 1/p0 (N >= 40)', all(m < ip for _, m, ip in rows),
           ', '.join(f'N={N}: {m:,.0f} vs {ip:,.0f}' for N, m, ip in rows))
-    # N_P = 1e4 (Fig. S3, blue): neutral route, no deleterious fixation, slope as printed
+    # N_P = 1e4 (Fig. S3, blue). Neutral fixations = <M>/N_P is an identity here (pi(0) = 1/N_P
+    # exactly; it only restates the neutral share of proposals), so it is printed, not checked.
     from paper_replication.figures import wls_exponent
+    q = []
+    for N in grid('andnot_1e4', 400):
+        h = load('andnot_1e4', N)['counts'][:, 2].mean()
+        q.append((N, h * enumerate_p(parallel(N), 1e4, ANDNOT)[0]))
+    if q:
+        small = [x for N, x in q if N <= 10]
+        large = [x for N, x in q if N >= 100]
+        check('andnot_1e4 first step (proposals at fitness 1/2) = frozen-start 1/p0 within 5% for N <= 10, '
+              'below 0.5 x 1/p0 for N >= 100 (drift)',
+              all(0.95 <= x <= 1.05 for x in small) and all(x < 0.5 for x in large),
+              ', '.join(f'{N}: {x:.2f}' for N, x in q))
     for tag in ('andnot', 'or', 'true'):
         exp = f'{tag}_1e4'
         Ns = grid(exp, 10**7)
@@ -242,10 +258,12 @@ def other_targets():
             continue
         rat = [load(exp, N)['fix_neu'].mean() / (load(exp, N)['M'].mean() / 1e4) for N in Ns if N >= 1000]
         dele = sum(int(load(exp, N)['fix_del'].sum()) for N in Ns)
+        noneu = sum(int((load(exp, N)['fix_neu'] < 1).sum()) for N in Ns)
         ex = wls_exponent(series(exp, 'M', nmax=10**7), 1000)
-        check(f'{exp}: neutral fixations = <M>/N_P ± 5% (N >= 1e3), no deleterious fixation, slope in [0.85, 1.1]',
-              all(0.95 <= x <= 1.05 for x in rat) and dele == 0 and 0.85 <= ex[0] <= 1.1,
-              f'ratio {min(rat):.3f}–{max(rat):.3f}; deleterious {dele}; slope {ex[0]:.3f} ± {ex[1]:.3f}')
+        print(f'    ({exp}: neutral fixations / (<M>/N_P), N >= 1e3: {min(rat):.3f}–{max(rat):.3f}; identity)')
+        check(f'{exp}: no deleterious fixation, a neutral fixation in every run, slope in [0.85, 1.1] (N >= 1e3)',
+              dele == 0 and noneu == 0 and 0.85 <= ex[0] <= 1.1,
+              f'deleterious {dele}; runs without a neutral fixation {noneu}; slope {ex[0]:.3f} ± {ex[1]:.3f}')
 
 
 def titles():

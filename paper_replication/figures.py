@@ -902,7 +902,7 @@ def figS1(outdir, big):
     ax.legend(loc='upper right', fontsize=9)
     note(ax, '$M$ counts proposals, not time. The exact theory assumes selection;\n'
              'the random walk has none (it also steps down in fitness).', loc=(0.02, 0.03), ha='left')
-    title(ax, 'A   random walk from the parallel start: $M \\propto N$')
+    title(ax, 'A   random walk from the parallel start: $M/N$ levels off near 5')
 
     ax = axs[1]; loglog(ax, ylabel='probability per proposed mutation (pooled)')
     for exp, hollow, tag in [('rw', False, 'random walk'), ('par_1e4', True, 'selection')]:
@@ -979,6 +979,15 @@ def figS2(outdir, big):
     save(fig, 'figS2_distributions.png', outdir)
 
 
+def _level_mean(exp, m):
+    """Rows (N, mean proposals made at fitness m/4, ...) in the series() layout (no CI)."""
+    rows = []
+    for N in grid(exp):
+        x = load(exp, N)['counts'][:, m].astype(float)
+        rows.append((N, x.mean(), np.nan, np.nan, np.nan, np.nan, len(x)))
+    return np.array(rows) if rows else np.zeros((0, 7))
+
+
 def _start_fitness(target):
     return bin(~(0b0111 ^ target) & 0xF).count('1') / 4
 
@@ -988,26 +997,40 @@ def figS3(outdir, big):
     fig, axs = plt.subplots(1, 3, figsize=(18, 6.2))
     for k, (ax, (tag, lab, tgt)) in enumerate(zip(axs, [
             ('andnot', '$I_1$ AND NOT $I_2$', ANDNOT), ('or', 'OR', OR), ('true', 'TRUE', TRUE)])):
-        loglog(ax, ylabel='total mutations proposed, $M$ (mean, 95% CI)')
+        loglog(ax, ylabel='mutations proposed (mean; thin bars: 5–95% of runs)')
         for Np, exp, col, mk in [(10.0, f'{tag}_10', PINK, 'o'), (1e4, f'{tag}_1e4', BLUE, 's')]:
             dots(ax, series(exp, 'M'), col, marker=mk, spread=True,
-                 label=f'$N_P = {"10" if Np == 10 else "10^4"}$ (thin: 5–95% of runs)')
+                 label=f'$M$, $N_P = {"10" if Np == 10 else "10^4"}$')
+        lines = []
         if enumerate_p(parallel(20), 10.0, tgt)[0] > 0:
-            Ns = [n for n in grid(f'{tag}_10') if 20 <= n <= 400]
-            ax.plot(Ns, [1 / enumerate_p(parallel(n), 1e4, tgt)[0] for n in Ns], color=MUTED, ls=':',
-                    lw=1.4, label='frozen start $1/p_0$, $N_P = 10^4$ (8% lower at $N_P = 10$)')
-            txt = 'one rewiring of the start is beneficial, $1/p_0 \\propto N^2$: soon slower than drift'
+            # The frozen start predicts only the first step (1/2 -> 3/4): compare it with the
+            # proposals made at fitness 1/2, not with M.
+            h = _level_mean(f'{tag}_1e4', 2)
+            dots(ax, h, BLUE, hollow=True, marker='D', ms=5.5, ci=False,
+                 label='first step only: proposals at fitness ½, $N_P = 10^4$')
+            Ns = [n for n in grid(f'{tag}_1e4') if n <= 400]
+            ip = np.array([1 / enumerate_p(parallel(n), 1e4, tgt)[0] for n in Ns])
+            ax.plot(Ns, ip, color=MUTED, ls=':', lw=1.4,
+                    label='frozen start $1/p_0$, $N_P = 10^4$ (first step only)')
+            r = {int(n): v for n, v in h[:, :2]}
+            q = [(n, r[n] / v) for n, v in zip(Ns, ip) if n in r]
+            lines.append('one rewiring of the start is beneficial ($1/p_0 \\propto N^2$);\n'
+                         'first step / $1/p_0$: ' + ', '.join(f'{x:.2f}' for _, x in q[:2])
+                         + f' at $N$ = {q[0][0]}, {q[1][0]}, then {q[-1][1]:.2f} at $N$ = {q[-1][0]}'
+                         ' (drift finds ¾ faster)')
         else:
-            txt = 'no single mutation of the start is beneficial ($p_0 = 0$)'
+            lines.append('no single mutation of the start is beneficial ($p_0 = 0$), and none\n'
+                         'deleterious fixes: every run must fix a neutral mutation')
         rb = series(f'{tag}_1e4', 'M')
         if len(rb):
-            d = load(f'{tag}_1e4', int(rb[-1, 0]))
+            ex_all = wls_exponent(rb, 0)
             ex = wls_exponent(rb, 1000)
-            txt += (f'\n$N_P = 10^4$: neutral fixations = {d["fix_neu"].mean() / (d["M"].mean() / 1e4):.2f}'
-                    f'$\\,\\langle M\\rangle/N_P$, no deleterious ones;\n'
-                    + (f'slope {ex[0]:.2f} ± {ex[1]:.2f} for $N \\geq 10^3$; ' if ex else '')
-                    + f'$M/N$ = {rb[-1, 1] / rb[-1, 0]:,.0f} at $N = {int(rb[-1, 0]):,}$')
+            lines.append(f'$N_P = 10^4$: slope {ex_all[0]:.2f} over all $N$, '
+                         f'{ex[0]:.2f} ± {ex[1]:.2f} for $N \\geq 10^3$;\n'
+                         f'$M/N$ = {rb[-1, 1] / rb[-1, 0]:,.0f} at $N = {int(rb[-1, 0]):,}$')
+        txt = '\n'.join(lines)
         note(ax, txt, loc=(0.98, 0.03))
+        ax.set_ylim(2, 3e8); ax.keep_ylim = True
         ax.legend(loc='upper left', fontsize=8.5)
         title(ax, f'{"ABC"[k]}   NAND → {lab} (start fitness {_start_fitness(tgt):g})')
     save(fig, 'figS3_other_targets.png', outdir)

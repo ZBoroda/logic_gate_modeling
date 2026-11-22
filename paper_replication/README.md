@@ -22,6 +22,7 @@ python -m paper_replication.run [workers] [exp ...]   # simulations -> results/
 python -m paper_replication.checks                    # pass/fail checks against theory
 python -m paper_replication.figures 1e4               # -> figs_1e4/
 python -m paper_replication.figures 1e6               # -> figs_1e6/
+python -m paper_replication.rw_cycle 1000 3000        # Fig S1B: cycle redraws on computing edges
 ```
 
 ## What was simulated

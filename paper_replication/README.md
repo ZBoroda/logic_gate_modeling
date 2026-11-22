@@ -40,6 +40,7 @@ The model follows the paper's Methods:
 | `par_10` | parallel | AND | 10 | 5 – 10⁵ | 500 | S4 |
 | `chain_10` | chain | AND | 10 | 5 – 10⁶ | 500 | S5 |
 | `andnot_10`, `or_10`, `true_10` | parallel | I₁∧¬I₂, OR, TRUE | 10 | 5 – 10⁴ | 500 | S3 |
+| `andnot_1e4`, `or_1e4`, `true_1e4` | parallel | I₁∧¬I₂, OR, TRUE | 10⁴ | 5 – 10⁵ | 500 | S3 |
 | `rw` | parallel | AND | random walk | 5 – 10⁵ | 500 | S1 |
 
 The N_P = 10 runs and the random walk stop below 10⁶. Without strong selection,

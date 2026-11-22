@@ -12,7 +12,7 @@ Sources:
   of the reviews.
 
 The quantitative claims in the figure titles are checked against the data by
-`checks.py` (29 checks). Its output is summarised in section 4. The notes inside
+`checks.py` (32 checks). Its output is summarised in section 4. The notes inside
 panels were verified by hand and by the final adversarial review; they are not
 all automated.
 
@@ -225,18 +225,31 @@ all automated.
 - **D:** mean/N and median/N against the exact curves. median/mean → 0.82, so
   the median carries no extra scaling information.
 
-### Fig S3 (other targets, N_P = 10)
-- Shown as M/N; fits are removed. The start fitness is given in each title: ½,
-  ½ and ¾.
+### Fig S3 (other targets, N_P = 10 and 10⁴)
+- Shown as M on log-log axes; fits are removed. The start fitness is given in
+  each title: ½, ½ and ¾.
+- **New: the same targets at N_P = 10⁴** (`andnot_1e4`, `or_1e4`, `true_1e4`, 500
+  runs, N = 5 – 10⁵).
 - **From the parallel NAND start, frozen-genotype theory does not describe these
   runs:**
   - OR and TRUE have no beneficial single mutation (p₀ = 0).
   - For I₁∧¬I₂, one rewiring in N(2N+1) is beneficial, so 1/p₀ ∝ N² (83,409 at
-    N = 100, against an observed ⟨M⟩ of 3,955).
-  - The observed M ∝ N therefore depends on neutral or deleterious steps that
-    the strong-selection theory leaves out.
-  - The paper's "linear scaling for other targets" is shown only at N_P = 10.
-    We have not run these targets at N_P = 10⁴.
+    N = 100 for N_P = 10, against an observed ⟨M⟩ of 3,955). At N_P = 10⁴ the
+    direct step is faster than the observed ⟨M⟩ only below N ≈ 300.
+- **At N_P = 10⁴, every target is reached through neutral fixations:**
+  - Neutral fixations = ⟨M⟩/N_P within 5% for N ≥ 10³ (1.00 at N = 10⁵); no
+    deleterious mutation fixes in any run.
+  - For N ≥ 10³ the slopes are 0.96 ± 0.02 (I₁∧¬I₂), 0.99 ± 0.01 (OR) and
+    1.00 ± 0.01 (TRUE); M/N = 855, 1,660 and 1,566 at N = 10⁵, i.e.
+    0.09–0.17 N_P.
+  - M is 24–510× larger than at N_P = 10: with strong selection the runs wait
+    for rare neutral fixations (probability 1/N_P per proposal) instead of
+    drifting.
+  - From I₁∧¬I₂ at small N, the first step to fitness ¾ comes quickly and
+    92–99.9% of proposals (N ≤ 100) are spent at ¾; at large N most are spent
+    at ½ (61% at N = 10⁴).
+- So the paper's "linear scaling for other targets" holds at both N_P, but
+  through drift, not through the frozen-start mechanism of Eq. 2.
 
 ### Fig S4 / S5 (N_P = 10)
 - **A:**
@@ -304,7 +317,7 @@ the random walk are fits over curved data that the exact theory does not cover.
 
 ## 4. Checks against theory (`python -m paper_replication.checks`)
 
-**29/29 pass** on the rerun. Highlights:
+**32/32 pass** on the rerun. Highlights:
 
 - **Regression:** M, fate counts, resident counts and per-level counts are
   bit-identical to the results at commit 80cc677 (before the rerun) in all 112
@@ -349,8 +362,6 @@ against HEAD, which after the commit was the rerun itself; it is now pinned to
 1.2%; they now use the plain CI from N = 40.
 
 ## 5. Not done
-- I₁∧¬I₂, OR and TRUE at N_P = 10⁴, which would test whether the frozen-start
-  theory then applies.
 - Splitting n_comp and n_ben by fitness level, which would test Eq. 2 step by
   step from the chain start.
 - A family of starts linking the parallel (α = 0) and chain (α = 1) starts. This

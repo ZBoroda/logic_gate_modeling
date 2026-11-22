@@ -233,6 +233,19 @@ def other_targets():
         rows.append((N, d['M'].mean(), ip))
     check('I1 AND NOT I2: <M> < frozen-start 1/p0 (N >= 40)', all(m < ip for _, m, ip in rows),
           ', '.join(f'N={N}: {m:,.0f} vs {ip:,.0f}' for N, m, ip in rows))
+    # N_P = 1e4 (Fig. S3, blue): neutral route, no deleterious fixation, slope as printed
+    from paper_replication.figures import wls_exponent
+    for tag in ('andnot', 'or', 'true'):
+        exp = f'{tag}_1e4'
+        Ns = grid(exp, 10**7)
+        if not Ns:
+            continue
+        rat = [load(exp, N)['fix_neu'].mean() / (load(exp, N)['M'].mean() / 1e4) for N in Ns if N >= 1000]
+        dele = sum(int(load(exp, N)['fix_del'].sum()) for N in Ns)
+        ex = wls_exponent(series(exp, 'M', nmax=10**7), 1000)
+        check(f'{exp}: neutral fixations = <M>/N_P ± 5% (N >= 1e3), no deleterious fixation, slope in [0.85, 1.1]',
+              all(0.95 <= x <= 1.05 for x in rat) and dele == 0 and 0.85 <= ex[0] <= 1.1,
+              f'ratio {min(rat):.3f}–{max(rat):.3f}; deleterious {dele}; slope {ex[0]:.3f} ± {ex[1]:.3f}')
 
 
 def titles():

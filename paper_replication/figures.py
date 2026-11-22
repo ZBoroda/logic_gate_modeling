@@ -986,24 +986,30 @@ def _start_fitness(target):
 
 def figS3(outdir, big):
     from bottleneck_replication.starts import parallel
-    fig, axs = plt.subplots(1, 3, figsize=(18, 5.8))
-    for k, (ax, (exp, lab, tgt)) in enumerate(zip(axs, [
-            ('andnot_10', '$I_1$ AND NOT $I_2$', ANDNOT), ('or_10', 'OR', OR), ('true_10', 'TRUE', TRUE)])):
-        logx(ax, ylabel='mutations proposed / $N$ (mean, 95% CI)')
-        r = series(exp, 'Mn')
-        dots(ax, r, PINK, label='simulation, $N_P = 10$')
-        ax.set_ylim(0, None)
-        p0, _ = enumerate_p(parallel(20), 10.0, tgt)
-        if p0 > 0:
-            d100 = load(exp, 100)
-            ip = 1 / enumerate_p(parallel(100), 10.0, tgt)[0]
-            txt = (f'from the start, one rewiring in $N(2N+1)$ is beneficial:\n'
-                   f'with the start frozen, $1/p_0 \\propto N^2$ ({ip:,.0f} at $N = 100$'
-                   + (f', vs $\\langle M\\rangle$ = {d100["M"].mean():,.0f})' if d100 else ')'))
+    fig, axs = plt.subplots(1, 3, figsize=(18, 6.2))
+    for k, (ax, (tag, lab, tgt)) in enumerate(zip(axs, [
+            ('andnot', '$I_1$ AND NOT $I_2$', ANDNOT), ('or', 'OR', OR), ('true', 'TRUE', TRUE)])):
+        loglog(ax, ylabel='total mutations proposed, $M$ (mean, 95% CI)')
+        for Np, exp, col, mk in [(10.0, f'{tag}_10', PINK, 'o'), (1e4, f'{tag}_1e4', BLUE, 's')]:
+            dots(ax, series(exp, 'M'), col, marker=mk, spread=True,
+                 label=f'$N_P = {"10" if Np == 10 else "10^4"}$ (thin: 5–95% of runs)')
+        if enumerate_p(parallel(20), 10.0, tgt)[0] > 0:
+            Ns = [n for n in grid(f'{tag}_10') if 20 <= n <= 400]
+            ax.plot(Ns, [1 / enumerate_p(parallel(n), 1e4, tgt)[0] for n in Ns], color=MUTED, ls=':',
+                    lw=1.4, label='frozen start $1/p_0$, $N_P = 10^4$ (8% lower at $N_P = 10$)')
+            txt = 'one rewiring of the start is beneficial, $1/p_0 \\propto N^2$: soon slower than drift'
         else:
-            txt = 'no single mutation of the start is beneficial ($p_0 = 0$):\nthe first step must be neutral or deleterious'
-        note(ax, txt + '\n→ the frozen-genotype theory does not describe these runs', loc=(0.02, 0.03), ha='left')
-        ax.legend(loc='upper right', fontsize=9)
+            txt = 'no single mutation of the start is beneficial ($p_0 = 0$)'
+        rb = series(f'{tag}_1e4', 'M')
+        if len(rb):
+            d = load(f'{tag}_1e4', int(rb[-1, 0]))
+            ex = wls_exponent(rb, 1000)
+            txt += (f'\n$N_P = 10^4$: neutral fixations = {d["fix_neu"].mean() / (d["M"].mean() / 1e4):.2f}'
+                    f'$\\,\\langle M\\rangle/N_P$, no deleterious ones;\n'
+                    + (f'slope {ex[0]:.2f} ± {ex[1]:.2f} for $N \\geq 10^3$; ' if ex else '')
+                    + f'$M/N$ = {rb[-1, 1] / rb[-1, 0]:,.0f} at $N = {int(rb[-1, 0]):,}$')
+        note(ax, txt, loc=(0.98, 0.03))
+        ax.legend(loc='upper left', fontsize=8.5)
         title(ax, f'{"ABC"[k]}   NAND → {lab} (start fitness {_start_fitness(tgt):g})')
     save(fig, 'figS3_other_targets.png', outdir)
 

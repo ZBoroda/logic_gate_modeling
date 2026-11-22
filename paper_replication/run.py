@@ -11,6 +11,7 @@ faster_circuit.observe, extended to large N.
   or_10      parallel  OR           10     Fig S3B
   true_10    parallel  TRUE         10     Fig S3C
   rw         parallel  AND          (all mutations accepted)   Fig S1
+  andnot_1e4, or_1e4, true_1e4   as the _10 runs at N_P = 1e4   Fig S3
 
 Results: paper_replication/results/<exp>_N<N>.npz with stats (columns
 faster_circuit.observe.STAT_COLS), counts, seconds, p_res, k_edges.
@@ -51,11 +52,15 @@ EXPS = {
     'or_10':     ('parallel', OR, 10.0, GRID[:11], 500, False),
     'true_10':   ('parallel', TRUE, 10.0, GRID[:11], 500, False),
     'rw':        ('parallel', AND, None, GRID[:14], 500, False),
+    'andnot_1e4': ('parallel', ANDNOT, 1e4, GRID[:14], 500, False),
+    'or_1e4':    ('parallel', OR, 1e4, GRID[:14], 500, False),
+    'true_1e4':  ('parallel', TRUE, 1e4, GRID[:14], 500, False),
 }
 CHUNK = 25
 FB_DEF = 'edge_pooled_no_final'   # faster_circuit.observe f_b convention (see its docstring)
 # rough relative cost per run, for scheduling the most expensive chunks first
-COST = {'par_10': 40.0, 'rw': 40.0, 'andnot_10': 20.0, 'or_10': 10.0, 'true_10': 5.0}
+COST = {'par_10': 40.0, 'rw': 40.0, 'andnot_10': 20.0, 'or_10': 10.0, 'true_10': 5.0,
+        'andnot_1e4': 30.0, 'or_1e4': 10.0, 'true_1e4': 10.0}
 
 
 def path(exp, N):

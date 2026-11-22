@@ -47,9 +47,6 @@ The N_P = 10 runs and the random walk stop below 10⁶. Without strong selection
 the computing module drifts to thousands of gates in some runs. Every mutation
 then costs O(module) to evaluate.
 
-`rw_N100000.npz` was not rerun with the new `n_comp` counter, because it costs
-37 CPU-hours. Its other columns are identical, since the seeds are the same.
-
 ## Observables (`faster_circuit/observe.py`, per run)
 
 - **M, and the fates of proposals:** fixed or lost; beneficial, neutral or

@@ -183,7 +183,7 @@ def random_walk():
     check('rw pooled P(c) / computing-edge fraction = 0.50 ± 0.05 for N >= 1e3 (cycle redraws)',
           all(0.45 < x < 0.55 for x in big), f'ratio {min(big):.3f}–{max(big):.3f} (all N: {min(ratio):.3f}–{max(ratio):.3f})')
     s = slope(pc, 1000, 1e5)
-    check('rw pooled P(c) ~ constant over 1e3–4e4 (|slope| < 0.06)', abs(s) < 0.06,
+    check('rw pooled P(c) ~ constant over 1e3–1e5 (|slope| < 0.06)', abs(s) < 0.06,
           f'slope {s:+.3f}, values {pc[pc[:, 0] >= 1000, 1].min():.3f}–{pc[pc[:, 0] >= 1000, 1].max():.3f}')
     pb = pooled('rw', 'n_ben', 'n_comp', nmax=10**7, scale=lambda n: n)
     m = pb[pb[:, 0] >= 1000]

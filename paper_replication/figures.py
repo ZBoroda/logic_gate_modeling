@@ -915,8 +915,7 @@ def figS1(outdir, big):
     ax.legend(loc='lower left', fontsize=8.5, ncol=2)
     note(ax, 'without selection the module is a fixed fraction of the network\n'
              'and the beneficial fraction falls instead. $P(c)$ sits below the edge\n'
-             'fraction: rewiring a computing gate closes a cycle more often (redrawn).\n'
-             '$N = 10^5$: no $P(c)$, $P(b|c)$ (not rerun with the new counter)',
+             'fraction: rewiring a computing gate closes a cycle more often (redrawn).',
          loc=(0.02, 0.19), ha='left')
     ax.set_ylim(1e-7, 3); ax.keep_ylim = True
     title(ax, 'B   the factors of Eq. 2 swap roles')

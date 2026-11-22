@@ -210,7 +210,7 @@ all automated.
     fitness.
 - **B, which was "module grows as N^0.83":** replaced by pooled P(c) and P(b|c).
   - Without selection, P(c) levels off at about 0.06 per proposal (slope
-    −0.05 over N = 10³–4·10⁴): the module is a fixed fraction of the network.
+    −0.04 over N = 10³–10⁵): the module is a fixed fraction of the network.
   - The computing-edge fraction itself is about 0.12. P(c) is about half of
     that because computing gates sit upstream: in random-walk networks about 60% of
     draws on computing edges close a cycle against about 10% on other edges, and the redraw moves the proposal
@@ -336,9 +336,9 @@ the random walk are fits over curved data that the exact theory does not cover.
   - The rejected per-run estimator gives P(b|c) = 0.40, not 4/13, as predicted.
 - **Parallel start, N_P = 10:** typical-run N·P(c) flat (2.8–3.1); pooled P(c)
   flat (slope −0.08); pooled P(b|c) slope −0.92; N·P(c)P(b|c) = 0.72–0.79.
-- **Random walk:** pooled P(c) flat at 0.058–0.069 (slope −0.05) and 0.49–0.86
+- **Random walk:** pooled P(c) flat at 0.058–0.069 (slope −0.04) and 0.49–0.86
   of the computing-edge fraction (0.49–0.51 for N ≥ 10³); pooled P(b|c) slope
-  −0.91 (N·P(b|c) rises from 34 to 47, so the approach to 1/N is slow).
+  −0.93 (N·P(b|c) rises from 34 to 47, so the approach to 1/N is slow).
 - **Title claims:** beneficial fixations 2.00–2.12 (Fig. 3C); chain pooled
   P(c) ≥ 0.97, P(b|c) 0.05–0.23, P_fix 0.29–0.31 (Fig. 5F); chain at N_P = 10
   typical-run P(c) = 1.000, pooled 0.54–0.99 (Fig. S5C).

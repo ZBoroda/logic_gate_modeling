@@ -67,7 +67,7 @@ each mutation becomes expensive to evaluate.
 | 8 | `ce_sum` | computing edges summed over those residents. `ce_sum / n_res` is the paper's "mean number of computing edges". |
 | 9 | `fb_sum` | Σ over measured residents of (computing edges × that resident's f_b) |
 | 10 | `fb_n` | Σ over measured residents of their computing edges. `fb_sum / fb_n` is f_b, the fraction of a computing edge's allowed rewirings that are beneficial, pooled over edges. 0 when f_b was not measured. |
-| 11 | `capped` | 1 if the run hit the limit of 10⁹ proposals without reaching the target. One run in all the files did: run 277 of `or_1e4_N100000` (M = 10⁹, still at fitness ½), so the mean M of that file is a slight underestimate. |
+| 11 | `capped` | 1 if the run hit the limit of 10⁹ proposals without reaching the target. One run in all the files did: run 277 of `or_1e4_N100000` (M = 10⁹, stuck at fitness ¾), so the mean M of that file is a slight underestimate. |
 | 12 | `n_comp` | proposals that hit a computing edge of the current resident |
 
 Columns 1–6 sum to M. In the random walk every proposal is "fixed", so

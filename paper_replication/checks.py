@@ -285,8 +285,43 @@ def titles():
           f'median {min(med):.4f}–{max(med):.4f}; pooled {pc10[:, 1].min():.2f}–{pc10[:, 1].max():.2f}')
 
 
+def alpha_family():
+    """Fig. S7: starts with a chain of L ~ N^alpha gates in a parallel reservoir."""
+    from bottleneck_replication import run_1e6 as BN
+    from bottleneck_replication.fig_1e6 import two_step
+    from paper_replication.figures import wls_exponent
+    alphas = [0.2, 0.4, 0.5, 0.6, 0.75, 0.9]
+    n = bad = 0
+    for a in alphas:
+        for N in BN.N_GRID:
+            d, old = load(f'alpha_{a:.2f}', N), BN.path(a, N)
+            if d is None or not os.path.exists(old):
+                continue
+            o = np.load(old)
+            n += 1
+            bad += not (np.array_equal(d['M'], o['M']) and np.array_equal(d['counts'], o['counts']))
+    check('alpha family: M and counts identical to bottleneck_replication/results_1e6', n and not bad,
+          f'{n - bad}/{n} files identical')
+    pc_ex, m_ex = [], []
+    for a in alphas:
+        e = f'alpha_{a:.2f}'
+        pc = wls_exponent(pooled(e, 'n_comp', 'M', nmax=10**7), 10**4)
+        m = wls_exponent(series(e, 'M', nmax=10**7), 10**4)
+        Ns = [N for N in grid(e, 10**7) if N >= 10**4]
+        th = np.polyfit(np.log(Ns), np.log([two_step(N, a) for N in Ns]), 1)[0]
+        pc_ex.append((a, pc[0])); m_ex.append((a, m[0], th))
+    check('alpha family: pooled P(c) ∝ N^(alpha − 1) over 1e4–1e6 (exponent within 0.03)',
+          all(abs(x - (a - 1)) <= 0.03 for a, x in pc_ex),
+          ', '.join(f'{a:g}: {x:+.3f}' for a, x in pc_ex))
+    # the two-step theory (first step + bottleneck escape) omits the later steps, so it
+    # predicts the exponent, not the level
+    check('alpha family: <M> exponent over 1e4–1e6 within 0.05 of the two-step theory',
+          all(abs(x - t) <= 0.05 for _, x, t in m_ex),
+          ', '.join(f'{a:g}: {x:.3f} vs {t:.3f}' for a, x, t in m_ex))
+
+
 if __name__ == '__main__':
-    for f in (regression, parallel_1e4, par_10, random_walk, chain, other_targets, titles):
+    for f in (regression, parallel_1e4, par_10, random_walk, chain, other_targets, titles, alpha_family):
         try:
             f()
         except Exception as e:

@@ -43,6 +43,7 @@ The model follows the paper's Methods:
 | `andnot_10`, `or_10`, `true_10` | parallel | I₁∧¬I₂, OR, TRUE | 10 | 5 – 10⁴ | 500 | S3 |
 | `andnot_1e4`, `or_1e4`, `true_1e4` | parallel | I₁∧¬I₂, OR, TRUE | 10⁴ | 5 – 10⁵ | 500 | S3 |
 | `rw` | parallel | AND | random walk | 5 – 10⁵ | 500 | S1 |
+| `alpha_0.20` … `alpha_0.90` | chain of L ≈ N^α gates in a parallel reservoir | AND | 10⁴ | 25 – 10⁶ | 1000 | S7 (`figs_1e6` only) |
 
 The N_P = 10 runs and the random walk stop below 10⁶. Without strong selection,
 the computing module drifts to thousands of gates in some runs. Every mutation

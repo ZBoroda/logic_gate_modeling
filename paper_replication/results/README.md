@@ -21,6 +21,7 @@ the parallel start evolving AND at N_P = 10⁴ with N = 1000.
 | `true_10` | parallel | TRUE | 10 | 5 – 10⁴ | 500 | Fig. S3C |
 | `andnot_1e4`, `or_1e4`, `true_1e4` | parallel | as above | 10⁴ | 5 – 10⁵ | 500 | Fig. S3 (`paper_replication` only) |
 | `rw` | parallel | AND | none: random walk | 5 – 10⁵ | 500 | Fig. S1 |
+| `alpha_0.20` … `alpha_0.90` | chain of L ≈ N^α gates + parallel reservoir | AND | 10⁴ | 25 – 10⁶ | 1000 | Fig. S7 |
 
 What the parts of each name mean:
 - **`par` / `chain`:** the start network.
@@ -32,6 +33,11 @@ What the parts of each name mean:
 - **`_1e4` / `_10`:** the population size N_P in the fixation probability
   π(s) = (1 − e^{−s}) / (1 − e^{−N_P s}).
 - **`andnot`, `or`, `true`:** the target function; with no prefix it is AND.
+- **`alpha_<α>`:** a start between the two: a chain of L ≈ N^α gates (odd,
+  at least 3) feeding the output, the other N − L gates parallel
+  (`bottleneck_replication.starts`). These runs use the N grid 25, 50, 100, 200,
+  500, 10³ … 10⁶ and the seeds of `bottleneck_replication/run_1e6.py`, so M and
+  `counts` equal `bottleneck_replication/results_1e6/a<α>_N<N>.npz` exactly.
 - **`rw`:** the random walk. Every proposed mutation is accepted, whatever its
   effect on fitness.
 

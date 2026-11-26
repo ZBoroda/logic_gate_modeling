@@ -12,6 +12,10 @@ faster_circuit.observe, extended to large N.
   true_10    parallel  TRUE         10     Fig S3C
   rw         parallel  AND          (all mutations accepted)   Fig S1
   andnot_1e4, or_1e4, true_1e4   as the _10 runs at N_P = 1e4   Fig S3
+  alpha_0.20 ... alpha_0.90   chain module of L ~ N^alpha gates in a parallel
+             reservoir (bottleneck_replication.starts), AND, N_P = 1e4   Fig S7
+             Same starts, N grid and seeds as bottleneck_replication/run_1e6.py,
+             so M and counts must be bit-identical to results_1e6/.
 
 Results: paper_replication/results/<exp>_N<N>.npz with stats (columns
 faster_circuit.observe.STAT_COLS), counts, seconds, p_res, k_edges.
@@ -29,7 +33,8 @@ from multiprocessing import Pool
 
 import numpy as np
 
-from bottleneck_replication.starts import parallel, chain
+from bottleneck_replication.starts import parallel, chain, interpolating, module_length
+from bottleneck_replication import run_1e6 as BN
 
 OUT = os.path.join(os.path.dirname(__file__), 'results')
 M_MAX = 10**9
@@ -56,6 +61,9 @@ EXPS = {
     'or_1e4':    ('parallel', OR, 1e4, GRID[:14], 500, False),
     'true_1e4':  ('parallel', TRUE, 1e4, GRID[:14], 500, False),
 }
+ALPHAS = [0.2, 0.4, 0.5, 0.6, 0.75, 0.9]
+for _a in ALPHAS:
+    EXPS[f'alpha_{_a:.2f}'] = (f'interp:{_a}', AND, 1e4, BN.N_GRID, BN.TRIALS_MID, True)
 CHUNK = 25
 FB_DEF = 'edge_pooled_no_final'   # faster_circuit.observe f_b convention (see its docstring)
 # rough relative cost per run, for scheduling the most expensive chunks first
@@ -68,6 +76,8 @@ def path(exp, N):
 
 
 def seed_base(exp, N):
+    if exp.startswith('alpha_'):
+        return BN.seed_base(float(exp[6:]), N)           # the bottleneck runs' seeds
     return (zlib.crc32(exp.encode()) % 20_000 + N % 9973 * 20_000) * 10 % (2**31 - 10**6)
 
 
@@ -75,7 +85,10 @@ def run_chunk(args):
     exp, N, start, n = args
     from faster_circuit.observe import run_observed
     kind, tgt, Np, _, _, fb = EXPS[exp]
-    genome = parallel(N) if kind == 'parallel' else chain(N)
+    if kind.startswith('interp:'):
+        genome = interpolating(N, module_length(N, float(kind[7:])))
+    else:
+        genome = parallel(N) if kind == 'parallel' else chain(N)
     t = time.perf_counter()
     st, counts = run_observed(tgt, Np or 1.0, genome, n_trials=n, seed=seed_base(exp, N) + start,
                               m_max=M_MAX, p_res=-R_FB if fb else 0.0, k_edges=K_EDGES,

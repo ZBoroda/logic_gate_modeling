@@ -1145,6 +1145,92 @@ def figS6(outdir, big):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+# ── figure S7 (new): starts between parallel and chain ────────────────────────
+
+ALPHA_EXPS = ([(0.0, 'par_1e4')] + [(a, f'alpha_{a:.2f}') for a in (0.2, 0.4, 0.5, 0.6, 0.75, 0.9)]
+              + [(1.0, 'chain_1e4')])
+
+
+def _alpha_color(a):
+    # ordered parameter: one sequential ramp, evenly spaced by rank so neighbours stay apart
+    k = [x for x, _ in ALPHA_EXPS].index(a)
+    return plt.get_cmap('viridis')(0.9 * k / (len(ALPHA_EXPS) - 1))
+
+
+def figS7(outdir, big):
+    """Chain module of L ~ N^alpha gates in a parallel reservoir (bottleneck note)."""
+    from bottleneck_replication.starts import module_length
+    from bottleneck_replication.fig_1e6 import two_step
+    if not big:
+        return                                   # exponents are fitted over N = 1e4 - 1e6
+    exps = [(a, e) for a, e in ALPHA_EXPS if grid(e)]
+    fig, axs = plt.subplots(2, 2, figsize=(14, 11))
+    ax = axs[0, 0]; loglog(ax, ylabel='mutations proposed, $\\langle M \\rangle$ (mean, 95% CI)')
+    for a, e in exps:
+        r = series(e, 'M')
+        dots(ax, r, _alpha_color(a), label=f'$\\alpha$ = {a:g}', ms=5.5)
+        if a == 0:
+            curve(ax, (r[0, 0], r[-1, 0]), exact_M_parallel, _alpha_color(a), ls='--', lw=1)
+    ax.plot([], [], color=_alpha_color(0.0), ls='--', lw=1, label='exact Eq. 3 ($\\alpha$ = 0)')
+    ax.legend(loc='upper left', fontsize=8.5, ncol=2, alignment='left',
+              title='start: chain of $L \\approx N^\\alpha$ gates (odd) to the output,\n'
+                    'the other $N - L$ parallel ($\\alpha$ = 0: Fig. 3A; 1: Fig. 5A)',
+              title_fontsize=8.5)
+    title(ax, 'A   $\\langle M \\rangle$ goes from $\\propto N$ to flat as $\\alpha$ grows')
+
+    ax = axs[0, 1]; loglog(ax, ylabel='$P(c)$ per proposed mutation (pooled)')
+    for a, e in exps:
+        r = pooled(e, 'n_comp', 'M')
+        dots(ax, r, _alpha_color(a), ms=5.5)
+        ax.plot(r[:, 0], [(2 * module_length(int(n), a) + 1) / (2 * n + 1) if a < 1 else 1.0
+                          for n in r[:, 0]], color=_alpha_color(a), lw=1, ls=':', zorder=1)
+    ax.plot([], [], color=MUTED, ls=':', lw=1, label='computing-edge fraction of the start,\n$(2L+1)/(2N+1)$')
+    ax.legend(loc='lower left', fontsize=8.5)
+    title(ax, 'B   $P(c)$ is set by the start: $\\propto N^{\\alpha - 1}$')
+
+    ax = axs[1, 0]; loglog(ax, ylabel='$P(b\\,|\\,c)$ per proposed mutation (pooled)')
+    for a, e in exps:
+        dots(ax, pooled(e, 'n_ben', 'n_comp'), _alpha_color(a), ms=5.5)
+    title(ax, 'C   $P(b\\,|\\,c)$ falls for every intermediate start')
+
+    ax = axs[1, 1]
+    ax.set_xlabel('$\\alpha$ (chain length $L \\approx N^\\alpha$)')
+    ax.set_ylabel('exponent over $N = 10^4$ – $10^6$')
+    ax.grid(True, color=GRID_C, lw=0.6)
+    xs = np.linspace(0, 1, 101)
+    ax.plot(xs, np.minimum(1, 2 * (1 - xs)), color=INK, lw=1.2, label='$\\min(1, 2(1-\\alpha))$ (bottleneck note)')
+    ax.plot(xs, 1 - xs, color=BLUE, lw=1, ls='--', label='$1 - \\alpha$')
+    ax.plot(xs, np.minimum(xs, 1 - xs), color=GREEN, lw=1, ls='--', label='$\\min(\\alpha, 1-\\alpha)$')
+    rows = []
+    for a, e in exps:
+        ex = [wls_exponent(r, 10**4) for r in (series(e, 'M'), pooled(e, 'n_comp', 'M'),
+                                                 pooled(e, 'n_ben', 'n_comp'),
+                                                 pooled(e, 'fb_sum', 'fb_n', w='w_fb'))]
+        rows.append((a, *ex))
+    for k, (c, mk, lab, sign, hollow) in enumerate([
+            (INK, 'o', '$\\langle M \\rangle$', 1, False), (BLUE, 's', '$1/P(c)$', -1, False),
+            (GREEN, 'D', '$1/P(b\\,|\\,c)$', -1, False), (GREEN, 'D', '$1/f_b$ (structural)', -1, True)]):
+        pts = [(a, sign * ex[k][0], ex[k][1]) for a, *ex in rows if ex[k] is not None]
+        x, y, err = np.array(pts).T
+        kw = dict(mfc='white', mec=c, mew=1.5) if hollow else dict(mfc=c, mec=INK, mew=0.6)
+        ax.errorbar(x + 0.012 * (k - 1.5), y, yerr=err, fmt=mk, color=c, ms=6.5, elinewidth=1.4,
+                    capsize=0, label=lab, zorder=3, **kw)
+    th = []
+    for a, e in exps:
+        if 0 < a < 1:
+            Ns = [n for n in grid(e) if n >= 10**4]
+            th.append((a, np.polyfit(np.log(Ns), np.log([two_step(n, a) for n in Ns]), 1)[0]))
+    ax.plot(*np.array(th).T, '+', color=INK, ms=11, mew=2, zorder=4,
+            label='$\\langle M \\rangle$, two-step theory (bottleneck note)')
+    ax.set_xlim(-0.05, 1.05); ax.set_ylim(-0.25, 1.62)
+    ax.legend(loc='upper center', fontsize=8.5, ncol=2)
+    note(ax, 'exponents of $\\langle M \\rangle = $ fixed beneficial $/\\,[P(c)\\,P(b|c)\\,P_{fix}]$;\n'
+             '$P_{fix}$ and fixed beneficial stay flat, so $1/P(c)$ and $1/P(b|c)$ add up to $\\langle M \\rangle$',
+         loc=(0.02, 0.04), ha='left')
+    title(ax, 'D   which factor of Eq. 2 carries the scaling')
+    save(fig, 'figS7_intermediate_starts.png', outdir)
+
+
 def main():
     global NMAX
     which = sys.argv[1] if len(sys.argv) > 1 else '1e4'
@@ -1156,7 +1242,8 @@ def main():
     for name, fn, needs_big in [('fig1', fig1, False), ('fig2', fig2, False), ('fig3', fig3, True),
                                 ('fig4', fig4, True), ('fig5', fig5, True), ('figS1', figS1, True),
                                 ('figS2', figS2, True), ('figS3', figS3, True), ('figS4', figS4, True),
-                                ('figS5', figS5, True), ('figS6', figS6, True)]:
+                                ('figS5', figS5, True), ('figS6', figS6, True),
+                                ('figS7', figS7, True)]:
         if only and name not in only:
             continue
         try:

@@ -12,7 +12,7 @@ Sources:
   of the reviews.
 
 The quantitative claims in the figure titles are checked against the data by
-`checks.py` (32 checks). Its output is summarised in section 4. The notes inside
+`checks.py` (35 checks). Its output is summarised in section 4. The notes inside
 panels were verified by hand and by the final adversarial review; they are not
 all automated.
 
@@ -310,6 +310,43 @@ all automated.
   - If every edge mutated at rate 1/τ and cyclic mutants were inviable, chain
     times would be about 2× longer. The scaling would be the same.
 
+### Fig S7 (new: starts between parallel and chain)
+- **Not in the paper.** The bottleneck note's family of starts: a chain of
+  L ≈ N^α gates (rounded to an odd number, at least 3) feeding the output, the
+  other N − L gates parallel. α = 0 is the parallel start (Fig. 3A), α = 1 the
+  chain (Fig. 5A).
+- **Runs:** `alpha_0.20` … `alpha_0.90` (α = 0.2, 0.4, 0.5, 0.6, 0.75, 0.9), N_P = 10⁴,
+  AND, N = 25 – 10⁶, 1000 runs each. They reuse the starts, N grid and seeds of
+  `bottleneck_replication/run_1e6.py` with the full counters added. M and counts
+  are bit-identical to `bottleneck_replication/results_1e6` (90/90 files).
+- **Exponents over N = 10⁴ – 10⁶:**
+
+| α | ⟨M⟩ | two-step theory | P(c) | P(b\|c) | P_fix | structural f_b |
+|---|---|---|---|---|---|---|
+| 0 | 1.005 | 1 (Eq. 3) | −1.001 | +0.005 | −0.011 | −0.009 |
+| 0.2 | 0.968 | 0.959 | −0.815 | −0.129 | −0.012 | −0.157 |
+| 0.4 | 0.981 | 0.985 | −0.611 | −0.357 | −0.010 | −0.504 |
+| 0.5 | 0.984 | 0.991 | −0.503 | −0.469 | −0.005 | −0.662 |
+| 0.6 | 0.859 | 0.882 | −0.399 | −0.463 | +0.001 | −0.592 |
+| 0.75 | 0.462 | 0.506 | −0.245 | −0.215 | −0.004 | −0.093 |
+| 0.9 | 0.159 | 0.195 | −0.093 | −0.059 | −0.004 | −0.013 |
+| 1 | −0.050 | 0 | 0.000 | +0.051 | +0.003 | — |
+
+- **P(c) is set by the start.** Per proposal it follows the start's
+  computing-edge fraction (2L + 1)/(2N + 1) ∝ N^{α−1}; the exponent is within 0.02
+  of α − 1 at every α.
+- **P(b|c) carries the rest.** It falls roughly as N^{−min(α, 1−α)} (−0.13 to
+  −0.47 against −0.2 to −0.5 for α ≤ ½, approached slowly). P_fix (0.27–0.31)
+  and the number of fixed beneficial mutations (2.2–2.5 at N = 10⁶) stay flat.
+  So the exponents of 1/P(c) and 1/P(b|c) add up to that of ⟨M⟩, which follows
+  the bottleneck note's min(1, 2(1−α)). The exact two-step theory (first step plus
+  bottleneck escape) matches the ⟨M⟩ exponent within 0.05. It omits the later
+  steps, so it sits 1.1–2× below the level and is shown only as exponents.
+- **The paper's "P(b|c) independent of N" (Figs 4C, 5C) holds only at the two
+  endpoints.** For every intermediate start both the per-proposal P(b|c) and the
+  structural f_b fall with N (f_b exponent down to −0.66 at α = ½).
+- **Only in `figs_1e6`**: the exponents need N up to 10⁶.
+
 ## 3. Exponents, for comparison with the paper
 
 These are weighted least squares on the plotted statistic, with the standard
@@ -338,7 +375,7 @@ the random walk are fits over curved data that the exact theory does not cover.
 
 ## 4. Checks against theory (`python -m paper_replication.checks`)
 
-**32/32 pass** on the rerun. Highlights:
+**35/35 pass** on the rerun. Highlights:
 
 - **Regression:** M, fate counts, resident counts and per-level counts are
   bit-identical to the results at commit 80cc677 (before the rerun) in all 112
@@ -395,9 +432,14 @@ check "neutral fixations = ⟨M⟩/N_P" (and its par_1e4 twin) was an identity; 
 are now printed, not checked. They are replaced by the first-step comparison
 against 1/p₀ and by "a neutral fixation in every run". The count stays at 32.
 
+Three checks were added with Fig. S7 (35 in total): the α-family runs are
+bit-identical to the bottleneck runs (90/90); pooled P(c) ∝ N^{α−1} within 0.03
+over 10⁴–10⁶; and the ⟨M⟩ exponent is within 0.05 of the two-step theory. The
+0.05 tolerance was set after seeing the data (largest gap 0.044 at α = 0.75);
+the theory omits the steps after the bottleneck.
+
 ## 5. Not done
 - Splitting n_comp and n_ben by fitness level, which would test Eq. 2 step by
   step from the chain start.
-- A family of starts linking the parallel (α = 0) and chain (α = 1) starts. This
-  is the bottleneck note's own figure (`bottleneck_replication/`), not repeated
-  here.
+- Two-step theory for the per-proposal P(b|c) of the intermediate starts (Fig.
+  S7 compares only exponents).
